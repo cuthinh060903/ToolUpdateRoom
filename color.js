@@ -86,8 +86,8 @@ function rgbaToHex(r = 0, g = 0, b = 0, a = 1) {
 // docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/edit?gid=357486279#gid=38754548
 (async () => {
   const res = await spreadsheets(
-    "19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0",
-    "38 Huy!a2:b2"
+    "1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag",
+    "5 1!A5:B5"
   );
   console.log(res);
 })();
