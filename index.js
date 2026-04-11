@@ -1,25 +1,31 @@
-const fs = require("fs").promises;
+﻿const fs = require("fs").promises;
 const axios = require("axios");
-require('dotenv').config();
+require("dotenv").config();
 const csvtojson = require("csvtojson");
 const xlsx = require("xlsx");
 const { google } = require("googleapis");
 const cron = require("node-cron");
 const OpenAI = require("openai");
-const Fuse = require('fuse.js');
+const Fuse = require("fuse.js");
 const { LIST_GGSHEET } = require("./constants");
-const { extension } = require("./extension");
+const { extension, roomNameAliases } = require("./extension");
 const { sendTelegramMessage } = require("./telegram_bot");
 const path = require("path");
-const dayjs = require('dayjs');
-const { Client } = require('minio');
+const dayjs = require("dayjs");
+const { Client } = require("minio");
 const { time } = require("console");
 const mammoth = require("mammoth");
+const heicConvert = require("heic-convert");
 
 class UpdateRoomSari {
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY;
-    this.OpenAI = new OpenAI({ apiKey: this.apiKey });
+    this.OpenAI = this.apiKey ? new OpenAI({ apiKey: this.apiKey }) : null;
+    if (!this.apiKey) {
+      console.warn(
+        "[config] OPENAI_API_KEY is missing. OpenAI features will be disabled.",
+      );
+    }
     this.AUTH_USERNAME = "bot2nguon";
     this.AUTH_PASSWORD = "1234567";
     this.PAGE = 0;
@@ -34,22 +40,48 @@ class UpdateRoomSari {
     this.URL_API_LOCK_ROOM =
       "https://api-legacy.sari.vn/v1/rooms/lockRoomToDate?";
     this.LIST_GGSHEET = LIST_GGSHEET;
-    this.START_ID = 62;
+    this.START_ID = 8;
+    this.RUN_ONLY_IDS = (process.env.RUN_ONLY_IDS || "")
+      .split(",")
+      .map((id) => Number(id.trim()))
+      .filter((id) => Number.isFinite(id));
     this.API_KEY_GGSHEET = "4f74e1628d70cc3b23f7ad9d1d0a50802d01d1ea";
-    this.BUCKETNAME = 'sari';
+    this.BUCKETNAME = "sari";
+    this.MINIO_ACCESS_KEY = (process.env.MINIO_ACCESS_KEY || "").trim();
+    this.MINIO_SECRET_KEY = (process.env.MINIO_SECRET_KEY || "").trim();
+    this.hasMinioCredentials = Boolean(
+      this.MINIO_ACCESS_KEY && this.MINIO_SECRET_KEY,
+    );
+    if (!this.hasMinioCredentials) {
+      console.warn(
+        "[config] Missing MINIO_ACCESS_KEY/MINIO_SECRET_KEY. Create a .env file from .env.example before uploading images.",
+      );
+    }
     // Conflict resolution: prefer higher features (e.g., 2N > 1N)
     this.priorityGroups = [
       ["3N", "2N", "1N"],
-      ["2WC", "1WC"]
+      ["2WC", "1WC"],
     ];
+    this.addressMatchProfileCache = new Map();
+    this.addressVariantCache = new Map();
 
     this.minioClient = new Client({
-      endPoint: 's3.sari.vn',
+      endPoint: "s3.sari.vn",
       port: 443,
       useSSL: true,
-      accessKey: process.env.MINIO_ACCESS_KEY,
-      secretKey: process.env.MINIO_SECRET_KEY,
+      accessKey: this.MINIO_ACCESS_KEY,
+      secretKey: this.MINIO_SECRET_KEY,
     });
+  }
+
+  ensureMinioCredentials() {
+    if (this.hasMinioCredentials) {
+      return;
+    }
+
+    throw new Error(
+      "Missing MINIO_ACCESS_KEY/MINIO_SECRET_KEY. Create .env from .env.example and paste the real values.",
+    );
   }
 
   /**
@@ -57,36 +89,140 @@ class UpdateRoomSari {
    */
   extractFolderId(driveLink) {
     if (!driveLink) return null;
-    if (!driveLink.includes('https://drive.google.com/drive')) return null;
-    const match = driveLink.match(/\/folders\/([a-zA-Z0-9_-]+)/);
-    return match ? match[1] : null;
+    const normalizedLink = driveLink.toString().trim();
+    const folderMatch = normalizedLink.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch) {
+      return folderMatch[1];
+    }
+
+    const queryMatch = normalizedLink.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    return queryMatch ? queryMatch[1] : null;
+  }
+
+  normalizeExternalUrl(rawValue) {
+    if (!rawValue) {
+      return "";
+    }
+
+    return rawValue
+      .toString()
+      .trim()
+      .replace(/[\])},;]+$/g, "");
+  }
+
+  getImageSourceType(rawLink) {
+    const normalizedLink = this.normalizeExternalUrl(rawLink);
+    if (!normalizedLink) {
+      return null;
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(normalizedLink);
+    } catch (error) {
+      return null;
+    }
+
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const pathname = parsedUrl.pathname || "";
+    if (
+      hostname === "drive.google.com" &&
+      this.extractFolderId(normalizedLink)
+    ) {
+      return "drive_folder";
+    }
+
+    if (hostname === "photos.app.goo.gl") {
+      return "google_photos_share";
+    }
+
+    if (hostname === "photos.google.com" && pathname.startsWith("/share/")) {
+      return "google_photos_share";
+    }
+
+    if (hostname.endsWith("googleusercontent.com")) {
+      return "direct_image";
+    }
+
+    return null;
+  }
+
+  extractImageSourceLink(rawValue) {
+    if (!rawValue) {
+      return null;
+    }
+
+    const urlMatches =
+      rawValue.toString().match(/https?:\/\/[^\s"'<>]+/gi) || [];
+    for (const urlMatch of urlMatches) {
+      const normalizedLink = this.normalizeExternalUrl(urlMatch);
+      if (this.getImageSourceType(normalizedLink)) {
+        return normalizedLink;
+      }
+    }
+
+    return null;
+  }
+
+  extractDriveLink(rawValue) {
+    if (!rawValue) return null;
+    const match = rawValue
+      .toString()
+      .match(/https:\/\/drive\.google\.com\/[^\s"'<>]+/i);
+    return match ? match[0] : null;
+  }
+
+  createDriveClient(auth) {
+    return google.drive({ version: "v3", auth });
+  }
+
+  isGoogleDrivePermissionError(error) {
+    const statusCode = error?.code || error?.response?.status;
+    const message = (error?.message || "").toLowerCase();
+    return (
+      statusCode === 401 ||
+      statusCode === 403 ||
+      statusCode === 404 ||
+      message.includes("access denied") ||
+      message.includes("permission denied") ||
+      message.includes("insufficient permissions") ||
+      message.includes("not found")
+    );
   }
   /**
-   * 
-   * @param {*} objectPath 
-   * @param {*} bucketName 
-   * @returns 
+   *
+   * @param {*} objectPath
+   * @param {*} bucketName
+   * @returns
    */
-  async checkUploadFile(objectPath, bucketName) {
+  async checkUploadFile(objectPath, bucketName, expectedCount = 0) {
+    this.ensureMinioCredentials();
     const exists = await this.minioClient.bucketExists(bucketName);
     if (!exists) {
       await this.minioClient.makeBucket(bucketName);
       console.log(`✅ Created bucket: ${bucketName}`);
     }
-    const objectsStream = this.minioClient.listObjects(bucketName, objectPath, true);
+    const objectsStream = this.minioClient.listObjects(
+      bucketName,
+      objectPath,
+      true,
+    );
     let found = [];
     await new Promise((resolve, reject) => {
-      objectsStream.on('data', obj => {
+      objectsStream.on("data", (obj) => {
         found.push(obj);
-        return
+        return;
       });
-      objectsStream.on('error', reject);
-      objectsStream.on('end', () => resolve(false));
+      objectsStream.on("error", reject);
+      objectsStream.on("end", () => resolve(false));
     });
+
+    if (expectedCount > 0) {
+      return found.length >= expectedCount;
+    }
 
     return found.length > this.minFileUpload;
   }
-
 
   /**
    * Upload stream lên MinIO nếu chưa tồn tại
@@ -94,91 +230,549 @@ class UpdateRoomSari {
    * @param {string} objectName - Tên file (hoặc path + tên file)
    * @param {string} bucketName - Tên bucket
    */
-  async uploadToMinIO(stream, objectName, bucketName) {
-
-    // Thư mục rỗng → upload file
-    await this.minioClient.putObject(bucketName, objectName, stream);
-    console.log(`✅ Uploaded "${objectName}" to bucket "${bucketName}"`);
+  async uploadToMinIO(fileData, objectName, bucketName, size) {
+    this.ensureMinioCredentials();
+    const validSize = Number.isFinite(size) && size > 0 ? size : undefined;
+    await this.minioClient.putObject(
+      bucketName,
+      objectName,
+      fileData,
+      validSize,
+    );
+    console.log(`??? Uploaded "${objectName}" to bucket "${bucketName}"`);
     return true;
   }
 
-  /**
- * Lấy danh sách ảnh trong folder Google Drive
- */
-  async listDriveImagesInFolder(auth, folderId) {
-    const drive = google.drive({ version: 'v3', auth });
+  getImageExtension(file) {
+    const fileNameExt = path.extname(file?.name || "");
+    if (fileNameExt) {
+      return fileNameExt.toLowerCase();
+    }
 
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
-      fields: 'files(id, name, mimeType)',
-      pageSize: 1000,
+    const mimeTypeToExt = {
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+      "image/gif": ".gif",
+      "image/heif": ".heic",
+      "image/heic": ".heic",
+    };
+
+    return mimeTypeToExt[(file?.mimeType || "").toLowerCase()] || ".jpg";
+  }
+
+  isHeicFile(file) {
+    const ext = this.getImageExtension(file);
+    const mimeType = (file?.mimeType || "").toLowerCase();
+    return (
+      ext === ".heic" ||
+      ext === ".heif" ||
+      mimeType === "image/heic" ||
+      mimeType === "image/heif"
+    );
+  }
+
+  async prepareImageForUpload(file, fileBuffer) {
+    if (!this.isHeicFile(file)) {
+      return {
+        buffer: fileBuffer,
+        ext: this.getImageExtension(file),
+      };
+    }
+
+    console.log(`Converting HEIC to JPG before upload: ${file.name}`);
+    const convertedBuffer = await heicConvert({
+      buffer: fileBuffer,
+      format: "JPEG",
+      quality: 0.92,
     });
 
-    return res.data.files;
+    return {
+      buffer: Buffer.from(convertedBuffer),
+      ext: ".jpg",
+    };
+  }
+
+  /**
+   * Lấy danh sách ảnh trong folder Google Drive
+   */
+  async listDriveImagesInFolder(driveClient, folderId) {
+    const res = await driveClient.files.list({
+      q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+      fields: "files(id, name, mimeType, size)",
+      pageSize: 1000,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+    });
+
+    return res.data.files || [];
+  }
+
+  async downloadDriveFile(driveClient, fileId) {
+    const res = await driveClient.files.get(
+      {
+        fileId,
+        alt: "media",
+        supportsAllDrives: true,
+      },
+      { responseType: "arraybuffer" },
+    );
+
+    return Buffer.from(res.data);
   }
 
   async sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  formatErrorForLog(value = "") {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    let text = "";
+    if (typeof value === "string") {
+      text = value;
+    } else {
+      try {
+        text = JSON.stringify(value);
+      } catch (error) {
+        text = String(value);
+      }
+    }
+
+    return text
+      .replace(/\|/g, "/")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 500);
+  }
+
+  getRequestErrorSummary(error) {
+    return {
+      status: error?.response?.status || "",
+      code: error?.code || "",
+      detail: this.formatErrorForLog(
+        error?.response?.data || error?.message || error,
+      ),
+    };
+  }
+
+  isRetryableRequestError(error) {
+    const retryableCodes = new Set([
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "ECONNABORTED",
+      "EAI_AGAIN",
+      "ENOTFOUND",
+      "ECONNREFUSED",
+      "EPIPE",
+    ]);
+    const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+    return (
+      retryableCodes.has(error?.code) ||
+      retryableStatuses.has(error?.response?.status)
+    );
+  }
+
+  async ensureLocalDirectory(localFolder = "downloads") {
+    const dirPath = path.join(__dirname, localFolder);
+    try {
+      await fs.access(dirPath);
+    } catch (err) {
+      await fs.mkdir(dirPath, { recursive: true });
+    }
+
+    return dirPath;
+  }
+
+  buildGooglePhotosOriginalImageUrl(rawUrl) {
+    const normalizedUrl = this.normalizeExternalUrl(rawUrl)
+      .replace(/\\u003d/gi, "=")
+      .replace(/\\u0026/gi, "&")
+      .replace(/\\u002f/gi, "/")
+      .replace(/\\\//g, "/");
+    if (!normalizedUrl) {
+      return null;
+    }
+
+    const [withoutHash] = normalizedUrl.split("#");
+    const [baseUrl, queryString = ""] = withoutHash.split("?");
+    const originalBaseUrl = baseUrl.replace(/=[^=/?#]+$/i, "");
+    return `${originalBaseUrl}=w0${queryString ? `?${queryString}` : ""}`;
+  }
+
+  extractGooglePhotosImageUrls(pageHtml) {
+    if (!pageHtml) {
+      return [];
+    }
+
+    const normalizedHtml = pageHtml
+      .toString()
+      .replace(/\\u003d/gi, "=")
+      .replace(/\\u0026/gi, "&")
+      .replace(/\\u002f/gi, "/")
+      .replace(/\\\//g, "/");
+    const rawImageUrls =
+      normalizedHtml.match(
+        /https?:\/\/lh\d+\.googleusercontent\.com\/[^\s"'<>\\]+/gi,
+      ) || [];
+    const imageUrls = [];
+    const seen = new Set();
+
+    for (const rawUrl of rawImageUrls) {
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(rawUrl);
+      } catch (error) {
+        continue;
+      }
+
+      const hostname = parsedUrl.hostname.toLowerCase();
+      if (!hostname.endsWith("googleusercontent.com")) {
+        continue;
+      }
+
+      if (!/^\/(pw|p)\//i.test(parsedUrl.pathname || "")) {
+        continue;
+      }
+
+      const originalUrl = this.buildGooglePhotosOriginalImageUrl(rawUrl);
+      if (!originalUrl || seen.has(originalUrl)) {
+        continue;
+      }
+
+      seen.add(originalUrl);
+      imageUrls.push(originalUrl);
+    }
+
+    return imageUrls;
+  }
+
+  async fetchGooglePhotosSharePage(shareLink) {
+    if (this.getImageSourceType(shareLink) !== "google_photos_share") {
+      throw new Error("Link Google Photos không hợp lệ.");
+    }
+
+    let response;
+    try {
+      response = await axios.get(shareLink, {
+        headers: {
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+        },
+        maxRedirects: 5,
+        responseType: "text",
+        timeout: 30000,
+      });
+    } catch (error) {
+      const statusCode = error?.response?.status;
+      if (statusCode === 404) {
+        throw new Error(
+          "Không truy cập được album Google Photos. Kiểm tra lại link chia sẻ hoặc quyền public của album.",
+        );
+      }
+
+      if (statusCode === 401 || statusCode === 403) {
+        throw new Error(
+          "Google Photos từ chối truy cập album. Kiểm tra lại quyền chia sẻ công khai của link ảnh.",
+        );
+      }
+
+      throw error;
+    }
+
+    const finalUrl =
+      response?.request?.res?.responseUrl ||
+      response?.request?._redirectable?._currentUrl ||
+      shareLink;
+    const finalSourceType = this.getImageSourceType(finalUrl);
+    if (
+      finalSourceType !== "google_photos_share" &&
+      finalSourceType !== "direct_image"
+    ) {
+      throw new Error("Google Photos đã chuyển hướng sang link không hỗ trợ.");
+    }
+
+    return {
+      html: response.data || "",
+      finalUrl: finalUrl,
+    };
+  }
+
+  async downloadImageByUrl(imageUrl) {
+    const response = await axios.get(imageUrl, {
+      headers: {
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      },
+      maxRedirects: 5,
+      responseType: "arraybuffer",
+      timeout: 30000,
+    });
+
+    return {
+      buffer: Buffer.from(response.data),
+      mimeType: response.headers["content-type"] || "",
+      size: Number(response.headers["content-length"]) || undefined,
+    };
+  }
+
+  async uploadImageFiles(imageFiles, room, downloadFile) {
+    if (!Array.isArray(imageFiles) || imageFiles.length === 0) {
+      return { status: "empty_folder" };
+    }
+
+    if (
+      await this.checkUploadFile(
+        `rooms/${room.id}/photos`,
+        this.BUCKETNAME,
+        imageFiles.length,
+      )
+    ) {
+      console.log(
+        `Room ${room.id} already has ${imageFiles.length} image(s) on MinIO.`,
+      );
+      return { status: "already_uploaded", count: imageFiles.length };
+    }
+
+    const delayMs = 1000;
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
+      const downloadedFile = await downloadFile(file, i);
+      const rawBuffer = Buffer.isBuffer(downloadedFile)
+        ? downloadedFile
+        : Buffer.isBuffer(downloadedFile?.buffer)
+          ? downloadedFile.buffer
+          : Buffer.from(downloadedFile?.buffer || []);
+
+      if (!rawBuffer.length) {
+        throw new Error(`Không tải được dữ liệu ảnh ${file?.name || i + 1}`);
+      }
+
+      const preparedFile = await this.prepareImageForUpload(
+        {
+          ...file,
+          mimeType: downloadedFile?.mimeType || file?.mimeType,
+          name: downloadedFile?.name || file?.name || `image_${i + 1}`,
+        },
+        rawBuffer,
+      );
+      const objectName = `rooms/${room.id}/photos/${room.id}_${i}${preparedFile.ext}`;
+      await this.uploadToMinIO(
+        preparedFile.buffer,
+        objectName,
+        this.BUCKETNAME,
+        preparedFile.buffer.length,
+      );
+
+      console.log(
+        `??? ?????i ${delayMs}ms tr?????c khi t???i ???nh ti???p theo...`,
+      );
+      await this.sleep(delayMs);
+    }
+
+    console.log("??? Upload ho??n t???t!");
+    return { status: "uploaded", count: imageFiles.length };
+  }
 
   /**
    * Tải tất cả file trong folder Google Drive về máy
    * @param {string} driveLink - Link thư mục Google Drive
    * @param {string} localFolder - Tên thư mục local để lưu file
    */
-  async downloadAllFilesFromFolder(driveLink, room, localFolder = "downloads") {
-    if (await this.checkUploadFile(`rooms/${room.id}/photos`, this.BUCKETNAME)) {
-      console.log(`Room ${room.id} has been uploaded to minio`);
-      return
-    }
+  async downloadAllFilesFromDriveFolder(
+    driveLink,
+    room,
+    localFolder = "downloads",
+  ) {
     const folderId = this.extractFolderId(driveLink);
 
     if (!folderId) {
-      return
+      return {
+        status: "invalid_link",
+        message: "Không tìm thấy thư mục Google Drive trong link ảnh.",
+      };
     }
 
     const auth = new google.auth.GoogleAuth({
       keyFile: "ggsheets.json",
       scopes: ["https://www.googleapis.com/auth/drive.readonly"],
     });
-    // const client = await auth.getClient();
-    const drive = google.drive({ version: "v3", auth });
-    const dirPath = path.join(__dirname, localFolder); // Đường dẫn đến thư mục bạn muốn kiểm tra
-    try {
-      await fs.access(dirPath); // Kiểm tra nếu thư mục đã tồn tại
-    } catch (err) {
-      // Nếu lỗi xảy ra -> thư mục không tồn tại -> tạo mới
-      await fs.mkdir(dirPath, { recursive: true });
+    const driveSources = [
+      {
+        name: "service_account",
+        client: this.createDriveClient(auth),
+      },
+    ];
+    if (this.API_KEY_GGSHEET) {
+      driveSources.push({
+        name: "api_key",
+        client: this.createDriveClient(this.API_KEY_GGSHEET),
+      });
+    }
+    await this.ensureLocalDirectory(localFolder);
+
+    let imageFiles = null;
+    let preferredSource = null;
+    let lastDriveError = null;
+    for (const driveSource of driveSources) {
+      try {
+        imageFiles = await this.listDriveImagesInFolder(
+          driveSource.client,
+          folderId,
+        );
+        preferredSource = driveSource;
+        break;
+      } catch (error) {
+        lastDriveError = error;
+        console.warn(
+          `[drive] ${driveSource.name} cannot access folder ${folderId}: ${
+            error?.message || error
+          }`,
+        );
+      }
     }
 
-    // Lấy danh sách ảnh
-    const imageFiles = await this.listDriveImagesInFolder(auth, folderId);
-
-    if (imageFiles.length === 0) {
-      console.log('📂 Không có ảnh nào trong folder Google Drive.');
-      return;
+    if (!imageFiles || !preferredSource) {
+      throw lastDriveError || new Error("Không truy cập được folder ảnh.");
     }
-    const delayMs = 1000; // Thời gian chờ giữa các lần tải (1 giây)
-    // Upload toàn bộ ảnh (trừ ảnh đầu nếu đã upload ở bước trên)
-    for (let i = 0; i < imageFiles.length; i++) {
-      const file = imageFiles[i];
-      const res = await drive.files.get(
-        { fileId: file.id, alt: 'media' },
-        { responseType: 'stream' }
+
+    const sourceOrder = [
+      preferredSource,
+      ...driveSources.filter((source) => source.name !== preferredSource.name),
+    ];
+    return this.uploadImageFiles(imageFiles, room, async (file) => {
+      let fileBuffer = null;
+      let lastDownloadError = null;
+      for (const driveSource of sourceOrder) {
+        try {
+          fileBuffer = await this.downloadDriveFile(driveSource.client, file.id);
+          break;
+        } catch (error) {
+          lastDownloadError = error;
+          if (!this.isGoogleDrivePermissionError(error)) {
+            throw error;
+          }
+          console.warn(
+            `[drive] ${driveSource.name} cannot download file ${file.id}: ${
+              error?.message || error
+            }`,
+          );
+        }
+      }
+
+      if (!fileBuffer) {
+        throw lastDownloadError || new Error(`Không tải được file ${file.id}`);
+      }
+
+      return {
+        buffer: fileBuffer,
+        mimeType: file.mimeType,
+        name: file.name,
+      };
+    });
+  }
+
+  async downloadAllFilesFromGooglePhotosShare(
+    shareLink,
+    room,
+    localFolder = "downloads",
+  ) {
+    await this.ensureLocalDirectory(localFolder);
+    const sharePage = await this.fetchGooglePhotosSharePage(shareLink);
+    if (this.getImageSourceType(sharePage.finalUrl) === "direct_image") {
+      return this.downloadDirectImage(sharePage.finalUrl, room, localFolder);
+    }
+
+    const imageUrls = this.extractGooglePhotosImageUrls(sharePage.html);
+    if (imageUrls.length === 0) {
+      return {
+        status: "empty_folder",
+        message: "Không tìm thấy ảnh công khai trong album Google Photos.",
+      };
+    }
+
+    console.log(
+      `[google_photos] Found ${imageUrls.length} image(s) from shared link.`,
+    );
+    const imageFiles = imageUrls.map((url, index) => ({
+      name: `google_photos_${index + 1}.jpg`,
+      mimeType: "image/jpeg",
+      url,
+    }));
+
+    return this.uploadImageFiles(imageFiles, room, async (file, index) => {
+      const downloadedFile = await this.downloadImageByUrl(file.url);
+      const mimeType = (downloadedFile.mimeType || "").toLowerCase();
+      if (!mimeType.startsWith("image/")) {
+        throw new Error(
+          `Google Photos trả về file không phải ảnh ở mục ${index + 1}.`,
+        );
+      }
+
+      return {
+        buffer: downloadedFile.buffer,
+        mimeType: downloadedFile.mimeType,
+        name: file.name,
+      };
+    });
+  }
+
+  async downloadDirectImage(imageUrl, room, localFolder = "downloads") {
+    await this.ensureLocalDirectory(localFolder);
+    return this.uploadImageFiles(
+      [
+        {
+          name: "direct_image",
+          mimeType: "",
+          url: imageUrl,
+        },
+      ],
+      room,
+      async (file) => {
+        const downloadedFile = await this.downloadImageByUrl(file.url);
+        const mimeType = (downloadedFile.mimeType || "").toLowerCase();
+        if (!mimeType.startsWith("image/")) {
+          throw new Error("Link ảnh trực tiếp không trả về file ảnh hợp lệ.");
+        }
+
+        return {
+          buffer: downloadedFile.buffer,
+          mimeType: downloadedFile.mimeType,
+          name: file.name,
+        };
+      },
+    );
+  }
+
+  async downloadAllFilesFromFolder(imageLink, room, localFolder = "downloads") {
+    const sourceType = this.getImageSourceType(imageLink);
+    if (sourceType === "drive_folder") {
+      return this.downloadAllFilesFromDriveFolder(imageLink, room, localFolder);
+    }
+
+    if (sourceType === "google_photos_share") {
+      return this.downloadAllFilesFromGooglePhotosShare(
+        imageLink,
+        room,
+        localFolder,
       );
-
-      const ext = path.extname(file.name);
-      const objectName = `rooms/${room.id}/photos/${room.id}_${i}${ext}`;
-      await this.uploadToMinIO(res.data, objectName, this.BUCKETNAME);
-
-
-      // Sleep sau mỗi lần tải
-      console.log(`⏳ Đợi ${delayMs}ms trước khi tải ảnh tiếp theo...`);
-      await this.sleep(delayMs); // Dừng 1 giây giữa các lần upload để tránh quá tải
     }
 
-    console.log('✅ Upload hoàn tất!');
+    if (sourceType === "direct_image") {
+      return this.downloadDirectImage(imageLink, room, localFolder);
+    }
+
+    return {
+      status: "unsupported_link",
+      message:
+        "Link ảnh không được hỗ trợ. Chỉ nhận Google Drive folder, Google Photos share link hoặc googleusercontent image link.",
+    };
   }
 
   convertDescription2Extension(description) {
@@ -190,7 +784,7 @@ class UpdateRoomSari {
 
     for (const [code, patterns] of Object.entries(extension)) {
       for (const pattern of patterns) {
-        const regex = new RegExp(`\\b${pattern}\\b`, 'i');
+        const regex = new RegExp(`\\b${pattern}\\b`, "i");
         if (regex.test(normalizedDesc)) {
           matched.set(code, true);
           break;
@@ -199,7 +793,7 @@ class UpdateRoomSari {
     }
 
     for (const group of this.priorityGroups) {
-      const found = group.find(code => matched.has(code));
+      const found = group.find((code) => matched.has(code));
       if (found) {
         result.add(found);
       } else {
@@ -220,46 +814,1803 @@ class UpdateRoomSari {
   }
 
   async removeVietnameseTones(str) {
-    return str.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/,/g, "").toLowerCase().trim();
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/,/g, "")
+      .toLowerCase()
+      .trim();
   }
 
   toSlug(str) {
     return str
       .toLowerCase()
-      .replace(/đ/g, 'd')                   // chuyển đ → d
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')      // bỏ dấu
-      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/đ/g, "d") // chuyển đ → d
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // bỏ dấu
+      .replace(/[^a-z0-9\s-]/g, "")
       .trim()
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
   }
 
+  removeVietnameseTonesSync(str = "") {
+    return str
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D")
+      .replace(/,/g, "")
+      .toLowerCase()
+      .trim();
+  }
 
-  async fuzzySearch(searchTerm, list) {
-    // if (searchTerm.includes('Ngõ 52 Quan Nhân')) console.log(searchTerm);
-
-    // Pre-processing to remove text in parentheses to improve match
-    let processedSearchTerm = searchTerm.replace(/\s*\(.*?\)\s*/g, '').trim();
-
-    const fuse = new Fuse(list, {
-      keys: ['address'],
-      includeScore: true,
-      threshold: 0.5, // Tăng ngưỡng lệch để tìm kiếm rộng hơn
-    });
-
-    // Tìm kiếm với fuse
-    const result = fuse.search(processedSearchTerm);
-    if (result.length > 0) {
-      console.log(`Chuỗi gần nhất: ${result[0].item.address} với chuỗi gốc ${searchTerm} (độ chính xác: ${result[0].score.toFixed(2)})`);
-      return result[0].item;
+  normalizeSheetCellText(value) {
+    if (value === undefined || value === null) {
+      return "";
     }
 
-    // Fallback: Tìm cứng theo chuỗi slug (giữ lại logic cũ phòng trường hợp fuse không tìm ra)
-    for (let item of list) {
-      if (item.address && this.toSlug(item.address).includes(this.toSlug(processedSearchTerm))) {
-        return item;
+    return value
+      .toString()
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  sanitizeTextForLegacyApi(value) {
+    if (value === undefined || value === null) {
+      return "";
+    }
+
+    return value
+      .toString()
+      .replace(/[\u{10000}-\u{10FFFF}]/gu, "")
+      .replace(/[\u200D\uFE0E\uFE0F]/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .trim();
+  }
+
+  isSheetHeaderText(value) {
+    if (!value) {
+      return false;
+    }
+
+    const normalized = this.removeVietnameseTonesSync(value).replace(
+      /\s+/g,
+      " ",
+    );
+    if (/^(cot|column)\s*\d+$/i.test(normalized)) {
+      return true;
+    }
+    return [
+      "dia chi",
+      "khu vuc",
+      "phong",
+      "so phong",
+      "gia niem yet",
+      "link anh + video",
+      "link anh video",
+    ].includes(normalized);
+  }
+
+  composeAddressFromColumns(row, columns = []) {
+    if (!Array.isArray(columns) || columns.length === 0) {
+      return "";
+    }
+
+    const [primaryColumn, ...extraColumns] = columns;
+    const primaryValue = this.normalizeSheetCellText(
+      row?.[`field${primaryColumn}`]?.value,
+    );
+    if (!primaryValue || this.isSheetHeaderText(primaryValue)) {
+      return "";
+    }
+
+    const parts = [primaryValue];
+    const seen = new Set([this.toSlug(primaryValue)]);
+    for (const column of extraColumns) {
+      const value = this.normalizeSheetCellText(row?.[`field${column}`]?.value);
+      if (!value || this.isSheetHeaderText(value)) {
+        continue;
       }
+
+      const slug = this.toSlug(value);
+      if (!slug || seen.has(slug)) {
+        continue;
+      }
+
+      if (
+        [...seen].some(
+          (existing) => existing.includes(slug) || slug.includes(existing),
+        )
+      ) {
+        continue;
+      }
+
+      seen.add(slug);
+      parts.push(value);
+    }
+
+    return parts.join(" - ").trim();
+  }
+
+  normalizeComparableText(value = "") {
+    return this.removeVietnameseTonesSync(
+      this.normalizeSheetCellText(value),
+    ).replace(/\s+/g, " ")
+      .trim();
+  }
+
+  isLikelySheetNoteAddress(value = "") {
+    const normalized = this.normalizeComparableText(value);
+    if (!normalized) {
+      return true;
+    }
+
+    if (this.isSheetHeaderText(value)) {
+      return true;
+    }
+
+    return [
+      /^trang\s*\d*$/i,
+      /^kinh nho\b/i,
+      /\bdoi tac\b/i,
+      /\bghep khach\b/i,
+      /^hotline\b/i,
+      /^sdt\b/i,
+      /^lien he\b/i,
+    ].some((pattern) => pattern.test(normalized));
+  }
+
+  isLikelySheetNoiseRoom(value = "") {
+    const normalized = this.normalizeComparableText(value);
+    const rawText = this.normalizeSheetCellText(value);
+    if (!normalized) {
+      return true;
+    }
+
+    if (this.isSheetHeaderText(value)) {
+      return true;
+    }
+
+    if (/^trang\s*\d*$/i.test(normalized)) {
+      return true;
+    }
+
+    const numberTokens = rawText.match(/\d+/g) || normalized.match(/\d+/g) || [];
+    const hasExplicitRoomListDelimiter = /[,;|]/.test(rawText);
+    const looksLikeRoomCodeList =
+      hasExplicitRoomListDelimiter &&
+      numberTokens.length >= 2 &&
+      numberTokens.every((token) => token.length >= 2 && token.length <= 4);
+    if (looksLikeRoomCodeList) {
+      return false;
+    }
+
+    const digitCount = normalized.replace(/\D/g, "").length;
+    const nonNumericRemainder = normalized.replace(/[\d\s().+\-]/g, "");
+    if (digitCount >= 8 && !nonNumericRemainder) {
+      return true;
+    }
+
+    return [
+      /^kinh nho\b/i,
+      /\bdoi tac\b/i,
+      /\bghep khach\b/i,
+      /^hotline\b/i,
+      /^sdt\b/i,
+    ].some((pattern) => pattern.test(normalized));
+  }
+
+  normalizeRoomValue(roomRaw, config = {}) {
+    const roomText = this.normalizeSheetCellText(roomRaw);
+    if (!roomText) {
+      return "";
+    }
+
+    const shouldUseNumericRooms = Boolean(config?.room_number_only);
+    if (!shouldUseNumericRooms) {
+      return roomText;
+    }
+
+    const minDigits = Number.isFinite(config?.room_number_min_digits)
+      ? config.room_number_min_digits
+      : 3;
+    const maxDigits = Number.isFinite(config?.room_number_max_digits)
+      ? config.room_number_max_digits
+      : 4;
+    const roomMatches =
+      roomText.match(new RegExp(`\\b\\d{${minDigits},${maxDigits}}\\b`, "g")) ||
+      [];
+
+    return [...new Set(roomMatches)].join(", ");
+  }
+
+  splitCombinedRoomPriceByMetadata(cellText = "", metadata = null) {
+    if (!metadata?.split) {
+      return null;
+    }
+
+    const parts = cellText
+      .toString()
+      .split(metadata.split)
+      .map((part) => this.normalizeSheetCellText(part))
+      .filter(Boolean);
+
+    if (parts.length < 2) {
+      return null;
+    }
+
+    const roomIndex = metadata.before === 1 ? 0 : 1;
+    const priceIndex = metadata.before === 3 ? 0 : 1;
+    const roomRaw = parts[roomIndex] || "";
+    const priceRaw = parts[priceIndex] || "";
+
+    if (!roomRaw && !priceRaw) {
+      return null;
+    }
+
+    return { roomRaw, priceRaw };
+  }
+
+  isClosedSharedRoomSegment(value = "") {
+    const normalized = this.normalizeComparableText(value);
+    if (!normalized) {
+      return false;
+    }
+
+    return /\b(?:da\s*bay|bay|da\s*chot|da\s*ban|sold|full|kin|het\s*phong)\b/i.test(
+      normalized,
+    );
+  }
+
+  isFutureAvailabilitySegment(value = "") {
+    const normalized = this.normalizeComparableText(value);
+    if (!normalized) {
+      return false;
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
+
+    const monthMatch = normalized.match(
+      /\bhet\s*(?:th|thang)\s*(\d{1,2})\b.*\b(?:vao|vo)\s*(?:o\s*)?duoc\b/i,
+    );
+    if (monthMatch) {
+      const targetMonth = parseInt(monthMatch[1], 10);
+      if (Number.isFinite(targetMonth) && targetMonth >= currentMonth) {
+        return true;
+      }
+    }
+
+    const dateMatch = normalized.match(
+      /\b(?:tu|sau|vao|vo)\s*(?:ngay\s*)?(\d{1,2})\s*[/-]\s*(\d{1,2})\b/i,
+    );
+    if (dateMatch) {
+      const targetDay = parseInt(dateMatch[1], 10);
+      const targetMonth = parseInt(dateMatch[2], 10);
+      if (
+        Number.isFinite(targetDay) &&
+        Number.isFinite(targetMonth) &&
+        (targetMonth > currentMonth ||
+          (targetMonth === currentMonth && targetDay > currentDay))
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  looksLikeNamedRoomLabel(value = "") {
+    const normalized = this.normalizeComparableText(value);
+    if (!normalized || normalized.length > 60) {
+      return false;
+    }
+
+    return /\b(?:studio|1k1n|1n1k|1pn|2pn|3pn|duplex|loft|gac\s*xep)\b/i.test(
+      normalized,
+    );
+  }
+
+  extractNamedRoomPriceFromSharedCell(cellValue, config = {}) {
+    const cellText = this.normalizeSheetCellText(cellValue);
+    if (!cellText) {
+      return null;
+    }
+
+    const namedMatch = cellText.match(
+      /^\s*((?:studio|1k1n|1n1k|1pn|2pn|3pn|duplex|loft|g[aá]c\s*x[ée]p)[^:;|-]{0,20})\s*[:\-]\s*(.+)$/i,
+    );
+    if (!namedMatch) {
+      return null;
+    }
+
+    const roomRaw = this.normalizeSheetCellText(namedMatch[1]);
+    const priceRaw = this.normalizeSheetCellText(namedMatch[2]);
+    if (!roomRaw || !priceRaw) {
+      return null;
+    }
+
+    const normalizedPrice = this.normalizePriceValue(priceRaw, config);
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice < 1000) {
+      return null;
+    }
+
+    return { roomRaw, priceRaw, sourceText: cellText };
+  }
+
+  extractLeadingTextRoomPriceFromSharedCell(cellValue, config = {}) {
+    if (!config?.hybrid_prefer_textual_room_label) {
+      return null;
+    }
+
+    const rawLines = cellValue
+      .toString()
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .map((line) => this.normalizeSheetCellText(line))
+      .filter(Boolean);
+    const firstLine = rawLines[0] || "";
+    if (!firstLine) {
+      return null;
+    }
+
+    if (
+      /^(?:phong\s*)?[a-z]?\d{2,5}(?:\.\d+(?:\+\d+)*)?[a-jl-z]?\b/i.test(
+        firstLine,
+      )
+    ) {
+      return null;
+    }
+
+    const priceMatch = firstLine.match(
+      /(\d+(?:[.,]\d+)?)\s*(trieu|tr|m|cu|k|vnđ|vnd|đ)(\d{0,6})\b/i,
+    );
+    if (!priceMatch) {
+      return null;
+    }
+
+    const priceRaw = this.normalizeSheetCellText(priceMatch[0]);
+    const normalizedPrice = this.normalizePriceValue(priceRaw, config);
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice < 1000) {
+      return null;
+    }
+
+    const roomRaw = this.normalizeSheetCellText(
+      firstLine.slice(0, priceMatch.index || 0),
+    )
+      .replace(/[\s\-–—:|/.,]+$/g, "")
+      .trim();
+    if (!roomRaw || !/[a-z]/i.test(this.normalizeComparableText(roomRaw))) {
+      return null;
+    }
+
+    return {
+      roomRaw,
+      priceRaw,
+      sourceText: firstLine,
+    };
+  }
+
+  extractRoomPriceFromSharedSegment(segmentValue, config = {}) {
+    const segmentText = this.normalizeSheetCellText(segmentValue);
+    if (!segmentText || this.isClosedSharedRoomSegment(segmentText)) {
+      return null;
+    }
+
+    const roomTokenPattern =
+      /^(?:phong\s*)?([a-z]?(?:\d{2,5}(?:\.\d+(?:\+\d+)*)?|\d\.\d+(?:\+\d+)*)[a-jl-z]?)\b/i;
+    const roomMatch = segmentText.match(
+      roomTokenPattern,
+    );
+    if (!roomMatch) {
+      return null;
+    }
+
+    const roomRaw = roomMatch[1]?.trim();
+    if (!roomRaw) {
+      return null;
+    }
+
+    let remainder = segmentText.slice(roomMatch[0].length).trim();
+    remainder = remainder
+      .replace(/^[\s\-–—:|/.,]+/g, "")
+      .trim();
+    const normalizedRemainder = remainder
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (/^(?:gia|price)\b/i.test(normalizedRemainder)) {
+      remainder = normalizedRemainder
+        .replace(/^(?:gia|price)\s*[:\-]?\s*/i, "")
+        .trim();
+    }
+
+    if (!remainder || !/^\d/.test(remainder)) {
+      return null;
+    }
+
+    const normalizedPrice = this.normalizePriceValue(remainder, config);
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice < 1000) {
+      return null;
+    }
+
+    return { roomRaw, priceRaw: remainder, sourceText: segmentText };
+  }
+
+  extractRoomPriceEntriesFromSharedCell(cellValue, config = {}) {
+    const cellText = this.normalizeSheetCellText(cellValue);
+    if (!cellText) {
+      return [];
+    }
+
+    const metadataSplit = this.splitCombinedRoomPriceByMetadata(
+      cellText,
+      config?.metadata,
+    );
+    if (metadataSplit) {
+      return [metadataSplit];
+    }
+
+    const roomPattern =
+      /(?:phong\s*)?[a-z]?(?:\d{2,5}(?:\.\d+(?:\+\d+)*)?|\d\.\d+(?:\+\d+)*)[a-jl-z]?\b/gi;
+    const roomStartPattern =
+      /^(?:phong\s*)?[a-z]?(?:\d{2,5}(?:\.\d+(?:\+\d+)*)?|\d\.\d+(?:\+\d+)*)[a-jl-z]?\b/i;
+    const isPricePrefixSegment = (value = "") => {
+      const normalized = this.removeVietnameseTonesSync(
+        this.normalizeSheetCellText(value),
+      ).toLowerCase();
+      return /^(?:gia|price)\b/.test(normalized);
+    };
+
+    const rawText = cellValue
+      .toString()
+      .replace(/\r/g, "\n")
+      .replace(
+        /\s{2,}(?=(?:phong\s*)?[a-z]?(?:\d{2,5}(?:\.\d+(?:\+\d+)*)?|\d\.\d+(?:\+\d+)*)[a-jl-z]?\b)/gi,
+        "\n",
+      );
+    const baseSegmentsRaw = rawText
+      .split(/\n+|[;|]+/)
+      .map((segment) => this.normalizeSheetCellText(segment))
+      .filter(Boolean);
+    const baseSegments = [];
+    for (let i = 0; i < baseSegmentsRaw.length; i++) {
+      const currentSegment = baseSegmentsRaw[i];
+      const nextSegment = baseSegmentsRaw[i + 1];
+      if (
+        nextSegment &&
+        roomStartPattern.test(currentSegment) &&
+        isPricePrefixSegment(nextSegment)
+      ) {
+        baseSegments.push(`${currentSegment} ${nextSegment}`.trim());
+        i++;
+        continue;
+      }
+
+      baseSegments.push(currentSegment);
+    }
+
+    const entries = [];
+    const leadingTextEntry = this.extractLeadingTextRoomPriceFromSharedCell(
+      cellValue,
+      config,
+    );
+    if (leadingTextEntry) {
+      entries.push(leadingTextEntry);
+    }
+
+    for (const baseSegment of baseSegments) {
+      if (!roomStartPattern.test(baseSegment)) {
+        continue;
+      }
+
+      const roomMatches = [];
+      roomPattern.lastIndex = 0;
+      let match;
+      while ((match = roomPattern.exec(baseSegment)) !== null) {
+        roomMatches.push({
+          index: match.index,
+        });
+      }
+
+      if (roomMatches.length <= 1) {
+        const entry = this.extractRoomPriceFromSharedSegment(baseSegment, config);
+        if (entry) {
+          entries.push(entry);
+        }
+        continue;
+      }
+
+      roomMatches.forEach((roomMatch, index) => {
+        const startIndex = roomMatch.index;
+        const endIndex =
+          index + 1 < roomMatches.length
+            ? roomMatches[index + 1].index
+            : baseSegment.length;
+        const segment = this.normalizeSheetCellText(
+          baseSegment.slice(startIndex, endIndex),
+        );
+        const entry = this.extractRoomPriceFromSharedSegment(segment, config);
+        if (entry) {
+          entries.push(entry);
+        }
+      });
+    }
+
+    return [
+      ...new Map(
+        entries.map((entry) => [
+          `${entry.roomRaw}|${this.normalizeSheetCellText(entry.priceRaw)}`,
+          entry,
+        ]),
+      ).values(),
+    ];
+  }
+
+  pickPreferredSharedRoomEntries(entries = [], config = {}) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return [];
+    }
+
+    if (!config?.shared_cell_pick_first_open) {
+      return entries;
+    }
+
+    const availableEntries = entries.filter(
+      (entry) => !this.isFutureAvailabilitySegment(entry?.sourceText || ""),
+    );
+    if (availableEntries.length > 0) {
+      return [availableEntries[0]];
+    }
+
+    return [entries[0]];
+  }
+
+  extractRoomPriceEntries(roomRaw, priceRaw, roomCol, priceCol, config = {}) {
+    const normalizedPriceRaw = this.normalizeSheetCellText(priceRaw);
+    const shouldTrySharedCellParse = roomCol === priceCol || !normalizedPriceRaw;
+
+    if (!shouldTrySharedCellParse) {
+      return [{ roomRaw, priceRaw }];
+    }
+
+    const sharedEntries = this.extractRoomPriceEntriesFromSharedCell(
+      roomRaw,
+      config,
+    );
+    if (sharedEntries.length > 0) {
+      return this.pickPreferredSharedRoomEntries(sharedEntries, config);
+    }
+
+    const namedEntry = this.extractNamedRoomPriceFromSharedCell(roomRaw, config);
+    if (namedEntry) {
+      return [namedEntry];
+    }
+
+    if (roomCol === priceCol) {
+      return this.looksLikeNamedRoomLabel(roomRaw)
+        ? [{ roomRaw, priceRaw: "" }]
+        : [];
+    }
+
+    return [{ roomRaw, priceRaw }];
+  }
+
+  extractHyperlinkFromFormula(formulaValue) {
+    if (!formulaValue) {
+      return null;
+    }
+
+    const hyperlinkMatch = formulaValue.match(
+      /HYPERLINK\(\s*"([^"]+)"|HYPERLINK\(\s*'([^']+)'/i,
+    );
+    if (hyperlinkMatch) {
+      return hyperlinkMatch[1] || hyperlinkMatch[2] || null;
+    }
+
+    const genericUrlMatch = formulaValue.match(/https?:\/\/[^\s"',)]+/i);
+    return genericUrlMatch ? genericUrlMatch[0] : null;
+  }
+
+  extractHyperlinkFromCell(cell) {
+    return (
+      cell?.hyperlink ||
+      cell?.userEnteredFormat?.textFormat?.link?.uri ||
+      cell?.textFormatRuns?.find((run) => run.format?.link)?.format?.link
+        ?.uri ||
+      this.extractHyperlinkFromFormula(cell?.userEnteredValue?.formulaValue) ||
+      null
+    );
+  }
+
+  cleanAddressForMatch(rawAddress) {
+    if (!rawAddress) {
+      return "";
+    }
+
+    const normalizedValue = this.normalizeSheetCellText(rawAddress);
+    if (!normalizedValue) {
+      return "";
+    }
+
+    let cleanedAddress = normalizedValue
+      .replace(
+        /(?:\+?84|0)[\d.\s-]{6,}\d/g,
+        (phoneLikeText) => {
+          const digits = (phoneLikeText.match(/\d/g) || []).length;
+          return digits >= 8 ? " " : phoneLikeText;
+        },
+      )
+      .replace(
+        /\b(?:có|co|không|khong|ko)\s*thang\s*máy\b/gi,
+        " ",
+      )
+      .replace(/\bthang\s*bộ\b/gi, " ");
+
+    const trailingNoisePatterns = [
+      /\b(?:quản\s*lý(?:\s*dẫn)?|quan\s*ly(?:\s*dan)?|ql\s*dẫn|ql\s*dan|quản\s*lý\s*tòa|quan\s*ly\s*toa|liên\s*hệ|lien\s*he|sđt|sdt|zalo|call|tel)\b/i,
+      /\b(?:nội\s*thất|noi\s*that|phí\s*dịch\s*vụ|phi\s*dich\s*vu|ghi\s*chú|ghi\s*chu|số\s*người\s*ở|so\s*nguoi\s*o)\b/i,
+    ];
+    let cutIndex = cleanedAddress.length;
+    for (const pattern of trailingNoisePatterns) {
+      const match = cleanedAddress.match(pattern);
+      if (match && Number.isInteger(match.index) && match.index < cutIndex) {
+        cutIndex = match.index;
+      }
+    }
+
+    if (cutIndex < cleanedAddress.length) {
+      cleanedAddress = cleanedAddress.slice(0, cutIndex);
+    }
+
+    return cleanedAddress
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  cleanupAddressAliasText(rawSegment) {
+    const cleanedSegment = this.normalizeSheetCellText(rawSegment)
+      .replace(
+        /^(?:địa\s*chỉ\s*(?:cũ|mới)(?:\s*là)?|dia\s*chi\s*(?:cu|moi)(?:\s*la)?|đc\s*(?:cũ|mới)(?:\s*là)?|dc\s*(?:cu|moi)(?:\s*la)?)\s*[:\-]*/i,
+        "",
+      )
+      .trim();
+    return this.cleanAddressForMatch(cleanedSegment);
+  }
+
+  expandCompoundRouteAddressVariants(rawAddress) {
+    const normalizedValue = this.normalizeSheetCellText(rawAddress);
+    if (!normalizedValue) {
+      return [];
+    }
+
+    const variants = new Set();
+    const compoundNgoPattern =
+      /\b(?:ngo|ngõ)\s+((?:\d+[a-z]?\s*\/\s*)+\d+[a-z]?)\b/gi;
+    const expandedNgoVariant = normalizedValue.replace(
+      compoundNgoPattern,
+      (match, rawPath) => {
+        const pathParts = this.normalizeAddressNumberSignature(rawPath)
+          .split("/")
+          .filter(Boolean);
+        if (pathParts.length < 2) {
+          return match;
+        }
+
+        const outerPath = pathParts[0];
+        const innerPath = pathParts.slice(1).join("/");
+        return `ngách ${innerPath}, ngõ ${outerPath}`;
+      },
+    );
+
+    if (expandedNgoVariant !== normalizedValue) {
+      variants.add(expandedNgoVariant);
+    }
+
+    return [...variants];
+  }
+
+  extractAddressCoreText(rawAddress) {
+    const normalizedValue = this.normalizeSheetCellText(rawAddress);
+    if (!normalizedValue) {
+      return "";
+    }
+
+    const segments = normalizedValue
+      .split(",")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    if (segments.length <= 1) {
+      return this.cleanAddressForMatch(normalizedValue);
+    }
+
+    const hasNumberSignal = segments.some((segment) =>
+      /\d/.test(this.removeVietnameseTonesSync(segment)),
+    );
+    if (!hasNumberSignal) {
+      return this.cleanAddressForMatch(normalizedValue);
+    }
+
+    const firstSegmentKeywordTokens = this.extractAddressKeywordTokens(
+      segments[0],
+    );
+    const minSegmentsToKeep = firstSegmentKeywordTokens.length === 0 ? 2 : 1;
+    let keepUntil = segments.length;
+
+    while (keepUntil > minSegmentsToKeep) {
+      const trailingSegment = segments[keepUntil - 1];
+      const normalizedTrailingSegment =
+        this.removeVietnameseTonesSync(trailingSegment);
+      if (!normalizedTrailingSegment) {
+        keepUntil--;
+        continue;
+      }
+
+      if (/\d/.test(normalizedTrailingSegment)) {
+        break;
+      }
+
+      keepUntil--;
+    }
+
+    return this.cleanAddressForMatch(
+      segments.slice(0, Math.max(minSegmentsToKeep, keepUntil)).join(", "),
+    );
+  }
+
+  looksLikeAddressCandidate(rawValue = "") {
+    const cleanedValue = this.cleanAddressForMatch(rawValue);
+    if (!cleanedValue) {
+      return false;
+    }
+
+    const normalizedValue = this.removeVietnameseTonesSync(cleanedValue);
+    return /\d/.test(normalizedValue) && /[a-z]/i.test(normalizedValue);
+  }
+
+  getAddressVariants(rawAddress) {
+    const cacheKey = this.normalizeSheetCellText(rawAddress);
+    if (!cacheKey) {
+      return [];
+    }
+
+    if (this.addressVariantCache.has(cacheKey)) {
+      return this.addressVariantCache.get(cacheKey);
+    }
+
+    const variants = [];
+    const seen = new Set();
+    const pushVariant = (value) => {
+      const cleanedValue = this.cleanAddressForMatch(value);
+      if (!cleanedValue) {
+        return;
+      }
+
+      const normalizedKey = this.removeVietnameseTonesSync(cleanedValue);
+      if (!normalizedKey || seen.has(normalizedKey)) {
+        return;
+      }
+
+      seen.add(normalizedKey);
+      variants.push(cleanedValue);
+    };
+
+    const pushVariantWithExpansions = (value) => {
+      pushVariant(value);
+      this.expandCompoundRouteAddressVariants(value).forEach(pushVariant);
+    };
+
+    pushVariantWithExpansions(cacheKey);
+
+    const dashSegments = cacheKey
+      .split(/\s+[–—-]\s+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    if (dashSegments.length > 1) {
+      for (let index = 1; index < dashSegments.length; index++) {
+        const prefixVariant = dashSegments.slice(0, index).join(" - ").trim();
+        if (this.looksLikeAddressCandidate(prefixVariant)) {
+          pushVariantWithExpansions(prefixVariant);
+        }
+      }
+    }
+
+    const parentheticalMatches = cacheKey.match(/\([^)]*\)/g) || [];
+    for (const rawMatch of parentheticalMatches) {
+      const aliasValue = this.cleanupAddressAliasText(
+        rawMatch.replace(/[()]/g, " "),
+      );
+      if (this.looksLikeAddressCandidate(aliasValue)) {
+        pushVariantWithExpansions(aliasValue);
+      }
+    }
+
+    const aliasPattern =
+      /\b(?:địa\s*chỉ\s*(?:cũ|mới)(?:\s*là)?|dia\s*chi\s*(?:cu|moi)(?:\s*la)?|đc\s*(?:cũ|mới)(?:\s*là)?|dc\s*(?:cu|moi)(?:\s*la)?)\s*[:\-]*/i;
+    const aliasMatch = cacheKey.match(aliasPattern);
+    if (aliasMatch && Number.isInteger(aliasMatch.index)) {
+      const aliasValue = this.cleanupAddressAliasText(
+        cacheKey.slice(aliasMatch.index + aliasMatch[0].length),
+      );
+      if (this.looksLikeAddressCandidate(aliasValue)) {
+        pushVariantWithExpansions(aliasValue);
+      }
+    }
+
+    this.addressVariantCache.set(cacheKey, variants);
+    return variants;
+  }
+
+  extractAddressCompoundNumbers(rawAddress) {
+    const normalizedAddress = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    );
+    const matches =
+      normalizedAddress.match(/\d+[a-z]?(?:[/.-]\d+[a-z]?)+\b/g) || [];
+    return [
+      ...new Set(
+        matches
+          .map((match) => this.normalizeAddressNumberSignature(match))
+          .filter(Boolean),
+      ),
+    ];
+  }
+
+  extractAddressNumberTokens(rawAddress) {
+    const normalizedAddress = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    );
+    const matches =
+      normalizedAddress.match(/\d+[a-z]?(?:[/.-]\d+[a-z]?)*\b/g) || [];
+    const tokens = new Set();
+
+    for (const match of matches) {
+      const normalizedToken = this.normalizeAddressNumberSignature(match);
+      if (!normalizedToken) {
+        continue;
+      }
+
+      tokens.add(normalizedToken);
+      normalizedToken
+        .split("/")
+        .filter(Boolean)
+        .forEach((part) => tokens.add(part));
+    }
+
+    return [...tokens];
+  }
+
+  extractLeadingAddressPathSegments(rawAddress) {
+    const normalizedAddress = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!normalizedAddress) {
+      return [];
+    }
+
+    const addressCore = normalizedAddress
+      .replace(/^(?:so|nha(?:\s+so)?|so\s+nha)\s+/i, "")
+      .trim();
+    const leadingPathMatch = normalizedAddress.match(
+      /^(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i,
+    ) || addressCore.match(
+      /^(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i,
+    );
+    if (!leadingPathMatch) {
+      return [];
+    }
+
+    const normalizedPath = this.normalizeAddressNumberSignature(
+      leadingPathMatch[1],
+    );
+    if (!normalizedPath) {
+      return [];
+    }
+
+    return normalizedPath.split("/").filter(Boolean);
+  }
+
+  extractAddressRouteNumberTokens(rawAddress) {
+    const normalizedAddress = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    const routeMatches = [
+      ...normalizedAddress.matchAll(
+        /\b(?:ngo|ngach|hem|pho|duong|ngoach|toa|toa nha|lk|lo)\s+(\d+[a-z]?(?:[/.-]\d+[a-z]?)+|\d+[a-z]*)\b/gi,
+      ),
+    ];
+    const routeTokens = new Set(
+      routeMatches
+        .map((match) => this.normalizeAddressNumberSignature(match[1]))
+        .filter(Boolean),
+    );
+
+    if (routeTokens.size === 0) {
+      const leadingPathSegments = this.extractLeadingAddressPathSegments(
+        rawAddress,
+      );
+      if (leadingPathSegments.length > 1) {
+        leadingPathSegments
+          .slice(1)
+          .forEach((segment) => routeTokens.add(segment));
+      }
+    }
+
+    return [...routeTokens];
+  }
+
+  extractAddressHouseNumber(rawAddress) {
+    const normalizedAddress = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!normalizedAddress) {
+      return "";
+    }
+
+    const explicitHouseNumberMatch = normalizedAddress.match(
+      /\b(?:nha|so)\s+(\d+[a-z]*)\b/i,
+    );
+    if (explicitHouseNumberMatch) {
+      return this.normalizeAddressNumberSignature(explicitHouseNumberMatch[1]);
+    }
+
+    const leadingHouseNumberMatch = normalizedAddress.match(/^(\d+[a-z]*)\b/i);
+    if (leadingHouseNumberMatch) {
+      return this.normalizeAddressNumberSignature(leadingHouseNumberMatch[1]);
+    }
+
+    if (/[./-]/.test(normalizedAddress)) {
+      const trailingNumberMatches = [
+        ...normalizedAddress.matchAll(/(?:[./-])(\d+[a-z]*)\b/gi),
+      ];
+      if (trailingNumberMatches.length > 0) {
+        return this.normalizeAddressNumberSignature(
+          trailingNumberMatches[trailingNumberMatches.length - 1][1],
+        );
+      }
+    }
+
+    return "";
+  }
+
+  buildAddressMatchProfile(rawAddress) {
+    const cacheKey = this.normalizeSheetCellText(rawAddress);
+    if (!cacheKey) {
+      return null;
+    }
+
+    if (this.addressMatchProfileCache.has(cacheKey)) {
+      return this.addressMatchProfileCache.get(cacheKey);
+    }
+
+    const cleanedAddress = this.cleanAddressForMatch(cacheKey);
+    if (!cleanedAddress) {
+      this.addressMatchProfileCache.set(cacheKey, null);
+      return null;
+    }
+
+    const coreAddress = this.extractAddressCoreText(cleanedAddress) || cleanedAddress;
+    const normalizedAddress = this.removeVietnameseTonesSync(cleanedAddress)
+      .replace(/[():,\\-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const coreNormalizedAddress = this.removeVietnameseTonesSync(coreAddress)
+      .replace(/[():,\\-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const keywordTokens = this.extractAddressKeywordTokens(cleanedAddress);
+    const coreKeywordTokens = this.extractAddressKeywordTokens(coreAddress);
+    const numberTokens = this.extractAddressNumberTokens(cleanedAddress);
+    const routeNumbers = this.extractAddressRouteNumberTokens(cleanedAddress);
+    const compoundNumbers = this.extractAddressCompoundNumbers(cleanedAddress);
+    const houseNumber = this.extractAddressHouseNumber(cleanedAddress);
+    const profile = {
+      rawAddress: cacheKey,
+      cleanedAddress,
+      coreAddress,
+      normalizedAddress,
+      coreNormalizedAddress,
+      slug: this.toSlug(cleanedAddress),
+      keywordTokens,
+      coreKeywordTokens,
+      numberTokens,
+      routeNumbers,
+      compoundNumbers,
+      houseNumber,
+    };
+
+    this.addressMatchProfileCache.set(cacheKey, profile);
+    return profile;
+  }
+
+  getCandidateAddressVariants(candidate) {
+    if (!candidate) {
+      return [];
+    }
+
+    const sources = [
+      candidate?.address,
+      candidate?.address_valid,
+      candidate?.searchableAddress,
+      candidate?.name,
+    ];
+    const variants = [];
+    const seen = new Set();
+
+    for (const source of sources) {
+      for (const variant of this.getAddressVariants(source)) {
+        const normalizedVariant = this.removeVietnameseTonesSync(variant);
+        if (!normalizedVariant || seen.has(normalizedVariant)) {
+          continue;
+        }
+
+        seen.add(normalizedVariant);
+        variants.push(variant);
+      }
+    }
+
+    return variants;
+  }
+
+  normalizeAddressNumberSignature(rawValue = "") {
+    const compactValue = rawValue
+      .toString()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[.-]+/g, "/")
+      .replace(/[^a-z0-9/]/g, "");
+    if (!compactValue) {
+      return "";
+    }
+
+    return compactValue
+      .split("/")
+      .filter(Boolean)
+      .map((part) => {
+        const numericSuffixMatch = part.match(/^(\d+)([a-z]*)$/i);
+        if (!numericSuffixMatch) {
+          return part;
+        }
+
+        const normalizedNumber = String(
+          parseInt(numericSuffixMatch[1], 10) || 0,
+        );
+        return `${normalizedNumber}${numericSuffixMatch[2] || ""}`;
+      })
+      .join("/");
+  }
+
+  extractPrimaryAddressNumberSignature(rawAddress) {
+    const normalizedSource = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    )
+      .toLowerCase()
+      .replace(/[:,-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const explicitHouseNumberMatch = normalizedSource.match(
+      /\b(?:nha|so)\s+(\d+[a-z]*)\b/i,
+    );
+    const explicitHouseNumber = explicitHouseNumberMatch
+      ? this.normalizeAddressNumberSignature(explicitHouseNumberMatch[1])
+      : "";
+
+    const normalized = normalizedSource
+      .toLowerCase()
+      .replace(
+        /\b(dia chi|so nha|nha so|sn|so|nha|san van phong|toa nha)\b/g,
+        " ",
+      )
+      .replace(/[:,-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized) {
+      return "";
+    }
+
+    const compoundNumberMatch = normalized.match(
+      /\b(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i,
+    );
+    if (compoundNumberMatch) {
+      const compoundSignature = this.normalizeAddressNumberSignature(
+        compoundNumberMatch[1],
+      );
+      if (explicitHouseNumber) {
+        return `${explicitHouseNumber}|${compoundSignature}`;
+      }
+      return compoundSignature;
+    }
+
+    const match = normalized.match(/^(\d+[a-z]?(?:\/\d+[a-z]?)*)\b/i);
+    if (match) {
+      const normalizedMatch = this.normalizeAddressNumberSignature(match[1]);
+      if (
+        explicitHouseNumber &&
+        explicitHouseNumber !== normalizedMatch
+      ) {
+        return `${explicitHouseNumber}|${normalizedMatch}`;
+      }
+      return explicitHouseNumber || normalizedMatch;
+    }
+
+    const fallbackMatches = normalized.match(/\d+[a-z]?(?:\/\d+[a-z]?)*\b/g);
+    if (!fallbackMatches || fallbackMatches.length === 0) {
+      return explicitHouseNumber || "";
+    }
+
+    const fallbackSignature = this.normalizeAddressNumberSignature(
+      fallbackMatches[fallbackMatches.length - 1],
+    );
+    if (
+      explicitHouseNumber &&
+      explicitHouseNumber !== fallbackSignature
+    ) {
+      return `${explicitHouseNumber}|${fallbackSignature}`;
+    }
+
+    return explicitHouseNumber || fallbackSignature;
+  }
+
+  extractAddressKeywordTokens(rawAddress) {
+    const normalized = this.removeVietnameseTonesSync(
+      this.cleanAddressForMatch(rawAddress),
+    )
+      .replace(/[.:/\\(),-]/g, " ")
+      .replace(
+        /\b(dia|chi|so|nha|sn|san|van|phong|vp|toa|duong|pho|ngo|ngach|hem|khu|do|thi|kdt|lk|lo|can|ho|mat|bang|kinh|doanh)\b/g,
+        " ",
+      )
+      .replace(/\d+[a-z]?/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized) {
+      return [];
+    }
+
+    return [
+      ...new Set(normalized.split(" ").filter((token) => token.length >= 2)),
+    ];
+  }
+
+  getAddressKeywordOverlapScore(searchTokens, candidateAddress) {
+    if (!Array.isArray(searchTokens) || searchTokens.length === 0) {
+      return 0;
+    }
+
+    const candidateTokens = new Set(
+      this.extractAddressKeywordTokens(candidateAddress),
+    );
+    if (candidateTokens.size === 0) {
+      return 0;
+    }
+
+    return searchTokens.filter((token) => candidateTokens.has(token)).length;
+  }
+
+  normalizeArticleAddressText(rawAddress) {
+    return this.removeVietnameseTonesSync(rawAddress)
+      .replace(/[.:/\\(),-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  extractArticleAddressTokens(rawAddress) {
+    const normalized = this.normalizeArticleAddressText(rawAddress)
+      .replace(
+        /\b(tang|toa|toa nha|nha|so|duong|pho|ngo|ngach|hem|phuong|quan|tp|thanh pho)\b/g,
+        " ",
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized) {
+      return [];
+    }
+
+    return [
+      ...new Set(normalized.split(" ").filter((token) => token.length >= 2)),
+    ];
+  }
+
+  getTokenCoverageRatio(sourceTokens = [], candidateTokens = []) {
+    if (!Array.isArray(sourceTokens) || sourceTokens.length === 0) {
+      return 0;
+    }
+
+    const candidateTokenSet = new Set(candidateTokens || []);
+    if (candidateTokenSet.size === 0) {
+      return 0;
+    }
+
+    const overlapCount = sourceTokens.filter((token) =>
+      candidateTokenSet.has(token),
+    ).length;
+    return overlapCount / Math.max(sourceTokens.length, candidateTokenSet.size);
+  }
+
+  getArticleAddressSimilarity(searchTerm, candidateAddress) {
+    const normalizedSearchAddress = this.normalizeArticleAddressText(searchTerm);
+    const normalizedCandidateAddress =
+      this.normalizeArticleAddressText(candidateAddress);
+
+    if (!normalizedSearchAddress || !normalizedCandidateAddress) {
+      return 0;
+    }
+
+    if (
+      normalizedSearchAddress === normalizedCandidateAddress ||
+      normalizedSearchAddress.includes(normalizedCandidateAddress) ||
+      normalizedCandidateAddress.includes(normalizedSearchAddress)
+    ) {
+      return 1;
+    }
+
+    const searchTokens = this.extractArticleAddressTokens(searchTerm);
+    const candidateTokens = this.extractArticleAddressTokens(candidateAddress);
+    if (searchTokens.length === 0 || candidateTokens.length === 0) {
+      return 0;
+    }
+
+    return this.getTokenCoverageRatio(searchTokens, candidateTokens);
+  }
+
+  extractTrailingAddressTokens(rawAddress) {
+    const segments = this.normalizeSheetCellText(rawAddress)
+      .split(",")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    if (segments.length === 0) {
+      return [];
+    }
+
+    const trailingSegment = segments[segments.length - 1];
+    if (!trailingSegment || /\d/.test(trailingSegment)) {
+      return [];
+    }
+
+    return this.normalizeArticleAddressText(trailingSegment)
+      .split(" ")
+      .filter((token) => token.length >= 2);
+  }
+
+  hasCompatibleTrailingAddress(searchTerm, candidateAddress) {
+    const searchTrailingTokens = this.extractTrailingAddressTokens(searchTerm);
+    const candidateTrailingTokens =
+      this.extractTrailingAddressTokens(candidateAddress);
+
+    if (
+      searchTrailingTokens.length === 0 ||
+      candidateTrailingTokens.length === 0
+    ) {
+      return true;
+    }
+
+    return searchTrailingTokens.some((token) =>
+      candidateTrailingTokens.includes(token),
+    );
+  }
+
+  getCandidateAddressMatchText(candidate) {
+    return (
+      candidate?.item?.address ||
+      candidate?.item?.searchableAddress ||
+      candidate?.item?.address_valid ||
+      candidate?.item?.name ||
+      candidate?.address ||
+      candidate?.searchableAddress ||
+      candidate?.address_valid ||
+      candidate?.name ||
+      ""
+    );
+  }
+
+  areNumberPathsCompatible(firstValue = "", secondValue = "") {
+    if (!firstValue || !secondValue) {
+      return false;
+    }
+
+    if (firstValue === secondValue) {
+      return true;
+    }
+
+    const firstParts = firstValue.split("/").filter(Boolean);
+    const secondParts = secondValue.split("/").filter(Boolean);
+    const shorterParts =
+      firstParts.length <= secondParts.length ? firstParts : secondParts;
+    const longerParts =
+      firstParts.length > secondParts.length ? firstParts : secondParts;
+
+    if (shorterParts.every((part, index) => longerParts[index] === part)) {
+      return true;
+    }
+
+    const maxStartIndex = longerParts.length - shorterParts.length;
+    for (let startIndex = 0; startIndex <= maxStartIndex; startIndex++) {
+      const isContiguousSubPath = shorterParts.every(
+        (part, index) => longerParts[startIndex + index] === part,
+      );
+      if (isContiguousSubPath) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  hasCompatibleCompoundNumbers(searchNumbers = [], candidateNumbers = []) {
+    if (!Array.isArray(searchNumbers) || searchNumbers.length === 0) {
+      return true;
+    }
+
+    if (!Array.isArray(candidateNumbers) || candidateNumbers.length === 0) {
+      return true;
+    }
+
+    return searchNumbers.some((searchNumber) =>
+      candidateNumbers.some((candidateNumber) =>
+        this.areNumberPathsCompatible(searchNumber, candidateNumber),
+      ),
+    );
+  }
+
+  getCompatibleNumberPathCoverage(searchNumbers = [], candidateNumbers = []) {
+    if (!Array.isArray(searchNumbers) || searchNumbers.length === 0) {
+      return 0;
+    }
+
+    if (!Array.isArray(candidateNumbers) || candidateNumbers.length === 0) {
+      return 0;
+    }
+
+    const normalizedCandidateNumbers = [...new Set(candidateNumbers.filter(Boolean))];
+    if (normalizedCandidateNumbers.length === 0) {
+      return 0;
+    }
+
+    const matchedCount = searchNumbers.filter((searchNumber) =>
+      normalizedCandidateNumbers.some((candidateNumber) =>
+        this.areNumberPathsCompatible(searchNumber, candidateNumber),
+      ),
+    ).length;
+
+    return matchedCount / searchNumbers.length;
+  }
+
+  getAddressMatchThreshold(config = {}) {
+    const configuredThresholds = [
+      config.address_match_threshold,
+      config.article_address_similarity_threshold,
+    ];
+
+    for (const threshold of configuredThresholds) {
+      const numericThreshold = Number(threshold);
+      if (Number.isFinite(numericThreshold) && numericThreshold > 0) {
+        return numericThreshold;
+      }
+    }
+
+    return 0.72;
+  }
+
+  scoreAddressProfiles(searchProfile, candidateProfile, config = {}) {
+    if (!searchProfile || !candidateProfile) {
+      return {
+        accepted: false,
+        matchScore: 0,
+        rejectReason: "missing_profile",
+      };
+    }
+
+    const searchKeywordTokens = searchProfile.keywordTokens || [];
+    const candidateKeywordTokens = candidateProfile.keywordTokens || [];
+    const searchCoreKeywordTokens = searchProfile.coreKeywordTokens || [];
+    const candidateCoreKeywordTokens = candidateProfile.coreKeywordTokens || [];
+    const searchNumberTokens = searchProfile.numberTokens || [];
+    const candidateNumberTokens = candidateProfile.numberTokens || [];
+    const searchRouteNumbers = searchProfile.routeNumbers || [];
+    const candidateRouteNumbers = candidateProfile.routeNumbers || [];
+    const searchCompoundNumbers = searchProfile.compoundNumbers || [];
+    const candidateCompoundNumbers = candidateProfile.compoundNumbers || [];
+    const houseNumberMismatch =
+      searchProfile.houseNumber &&
+      candidateProfile.houseNumber &&
+      searchProfile.houseNumber !== candidateProfile.houseNumber;
+    if (houseNumberMismatch) {
+      return {
+        accepted: false,
+        matchScore: 0,
+        rejectReason: "house_number_mismatch",
+      };
+    }
+
+    const searchNumberTokenSet = new Set(searchNumberTokens);
+    const candidateNumberTokenSet = new Set(candidateNumberTokens);
+    const overlappingNumberTokens = searchNumberTokens.filter((token) =>
+      candidateNumberTokenSet.has(token),
+    );
+    if (
+      searchNumberTokenSet.size > 0 &&
+      candidateNumberTokenSet.size > 0 &&
+      overlappingNumberTokens.length === 0
+    ) {
+      return {
+        accepted: false,
+        matchScore: 0,
+        rejectReason: "number_token_mismatch",
+      };
+    }
+
+    if (
+      !this.hasCompatibleCompoundNumbers(
+        searchCompoundNumbers,
+        candidateCompoundNumbers,
+      )
+    ) {
+      return {
+        accepted: false,
+        matchScore: 0,
+        rejectReason: "compound_number_mismatch",
+      };
+    }
+
+    const fullKeywordCoverage = this.getTokenCoverageRatio(
+      searchKeywordTokens,
+      candidateKeywordTokens,
+    );
+    const reverseFullKeywordCoverage = this.getTokenCoverageRatio(
+      candidateKeywordTokens,
+      searchKeywordTokens,
+    );
+    const fullKeywordScore =
+      searchKeywordTokens.length > 0
+        ? Math.min(
+            1,
+            (fullKeywordCoverage * 2 + reverseFullKeywordCoverage) / 3,
+          )
+        : 0;
+    const coreKeywordCoverage = this.getTokenCoverageRatio(
+      searchCoreKeywordTokens,
+      candidateCoreKeywordTokens,
+    );
+    const reverseCoreKeywordCoverage = this.getTokenCoverageRatio(
+      candidateCoreKeywordTokens,
+      searchCoreKeywordTokens,
+    );
+    const coreKeywordScore =
+      searchCoreKeywordTokens.length > 0
+        ? Math.min(
+            1,
+            (coreKeywordCoverage * 2 + reverseCoreKeywordCoverage) / 3,
+          )
+        : 0;
+    const keywordCoverage = Math.max(fullKeywordCoverage, coreKeywordCoverage);
+    const keywordScore = Math.max(fullKeywordScore, coreKeywordScore);
+    const numberCoverage = this.getTokenCoverageRatio(
+      searchNumberTokens,
+      candidateNumberTokens,
+    );
+    const reverseNumberCoverage = this.getTokenCoverageRatio(
+      candidateNumberTokens,
+      searchNumberTokens,
+    );
+    const numberScore =
+      searchNumberTokens.length > 0
+        ? Math.min(1, (numberCoverage * 2 + reverseNumberCoverage) / 3)
+        : 0;
+    const routeCoverageCandidates =
+      candidateRouteNumbers.length > 0
+        ? candidateRouteNumbers
+        : [...candidateCompoundNumbers, ...candidateNumberTokens];
+    const routeCoverage =
+      searchRouteNumbers.length > 0
+        ? this.getCompatibleNumberPathCoverage(
+            searchRouteNumbers,
+            routeCoverageCandidates,
+          )
+        : 0;
+    let houseScore = 0;
+    if (searchProfile.houseNumber || candidateProfile.houseNumber) {
+      if (
+        searchProfile.houseNumber &&
+        candidateProfile.houseNumber &&
+        searchProfile.houseNumber === candidateProfile.houseNumber
+      ) {
+        houseScore = 1;
+      } else if (
+        searchProfile.houseNumber &&
+        candidateNumberTokenSet.has(searchProfile.houseNumber)
+      ) {
+        houseScore = 0.85;
+      } else if (
+        candidateProfile.houseNumber &&
+        searchNumberTokenSet.has(candidateProfile.houseNumber)
+      ) {
+        houseScore = 0.75;
+      }
+    }
+
+    const normalizedSearchAddress = searchProfile.normalizedAddress || "";
+    const normalizedCandidateAddress = candidateProfile.normalizedAddress || "";
+    const normalizedSearchCoreAddress = searchProfile.coreNormalizedAddress || "";
+    const normalizedCandidateCoreAddress =
+      candidateProfile.coreNormalizedAddress || "";
+    const exactTextScore =
+      (normalizedSearchAddress &&
+        normalizedCandidateAddress &&
+        (normalizedSearchAddress === normalizedCandidateAddress ||
+          normalizedSearchAddress.includes(normalizedCandidateAddress) ||
+          normalizedCandidateAddress.includes(normalizedSearchAddress))) ||
+      (normalizedSearchCoreAddress &&
+        normalizedCandidateCoreAddress &&
+        (normalizedSearchCoreAddress === normalizedCandidateCoreAddress ||
+          normalizedSearchCoreAddress.includes(normalizedCandidateCoreAddress) ||
+          normalizedCandidateCoreAddress.includes(normalizedSearchCoreAddress)))
+        ? 1
+        : 0;
+    const scoringComponents = [];
+    if (searchKeywordTokens.length > 0) {
+      scoringComponents.push({ weight: 4, score: keywordScore });
+    }
+    if (searchNumberTokens.length > 0 || candidateNumberTokens.length > 0) {
+      scoringComponents.push({ weight: 3, score: numberScore });
+    }
+    if (searchProfile.houseNumber || candidateProfile.houseNumber) {
+      scoringComponents.push({ weight: 3, score: houseScore });
+    }
+    if (searchRouteNumbers.length > 0 || candidateRouteNumbers.length > 0) {
+      scoringComponents.push({ weight: 2, score: routeCoverage });
+    }
+    scoringComponents.push({ weight: 1, score: exactTextScore });
+
+    const totalWeight = scoringComponents.reduce(
+      (sum, component) => sum + component.weight,
+      0,
+    );
+    const matchScore =
+      totalWeight > 0
+        ? scoringComponents.reduce(
+            (sum, component) => sum + component.weight * component.score,
+            0,
+          ) / totalWeight
+        : 0;
+    const keywordThreshold = searchKeywordTokens.length >= 3 ? 0.45 : 0.3;
+    const numberThreshold = searchNumberTokens.length > 0 ? 0.3 : 0;
+    const threshold = this.getAddressMatchThreshold(config);
+    const rejectReason =
+      matchScore < threshold
+        ? "score_below_threshold"
+        : keywordCoverage < keywordThreshold
+          ? "keyword_below_threshold"
+          : numberScore < numberThreshold
+            ? "number_below_threshold"
+            : null;
+
+    return {
+      accepted: !rejectReason,
+      matchScore,
+      exactTextScore,
+      keywordCoverage,
+      numberScore,
+      routeCoverage,
+      houseScore,
+      rejectReason,
+    };
+  }
+
+  scoreAddressCandidate(searchTerm, candidate, config = {}) {
+    const candidateItem = candidate?.item || candidate;
+    if (!candidateItem) {
+      return null;
+    }
+
+    const searchVariants = this.getAddressVariants(searchTerm);
+    const candidateVariants = this.getCandidateAddressVariants(candidateItem);
+    if (searchVariants.length === 0 || candidateVariants.length === 0) {
+      return null;
+    }
+
+    let bestMatch = null;
+    for (const searchVariant of searchVariants) {
+      const searchProfile = this.buildAddressMatchProfile(searchVariant);
+      if (!searchProfile) {
+        continue;
+      }
+
+      for (const candidateVariant of candidateVariants) {
+        const candidateProfile = this.buildAddressMatchProfile(candidateVariant);
+        if (!candidateProfile) {
+          continue;
+        }
+
+        const scoreResult = this.scoreAddressProfiles(
+          searchProfile,
+          candidateProfile,
+          config,
+        );
+        const shouldReplaceBestMatch =
+          !bestMatch ||
+          (scoreResult.accepted && !bestMatch.accepted) ||
+          (scoreResult.accepted === bestMatch.accepted &&
+            (scoreResult.matchScore > bestMatch.matchScore ||
+              (scoreResult.matchScore === bestMatch.matchScore &&
+                scoreResult.exactTextScore > bestMatch.exactTextScore)));
+        if (
+          shouldReplaceBestMatch
+        ) {
+          bestMatch = {
+            ...scoreResult,
+            item: candidateItem,
+            searchVariant,
+            candidateVariant,
+          };
+        }
+      }
+    }
+
+    return bestMatch;
+  }
+
+  isArticleAddressCompatible(searchTerm, candidateAddress, config = {}) {
+    if (config.article_address_match_mode === "similarity_threshold") {
+      const configuredThreshold = Number(
+        config.article_address_similarity_threshold,
+      );
+      const similarityThreshold = Number.isFinite(configuredThreshold)
+        ? configuredThreshold
+        : 0.7;
+      return (
+        this.getArticleAddressSimilarity(searchTerm, candidateAddress) >=
+        similarityThreshold
+      );
+    }
+
+    const normalizedSearchAddress = this.normalizeArticleAddressText(searchTerm);
+    const normalizedCandidateAddress =
+      this.normalizeArticleAddressText(candidateAddress);
+
+    if (!normalizedSearchAddress || !normalizedCandidateAddress) {
+      return false;
+    }
+
+    if (
+      normalizedSearchAddress === normalizedCandidateAddress ||
+      normalizedSearchAddress.includes(normalizedCandidateAddress) ||
+      normalizedCandidateAddress.includes(normalizedSearchAddress)
+    ) {
+      return true;
+    }
+
+    if (!this.hasCompatibleTrailingAddress(searchTerm, candidateAddress)) {
+      return false;
+    }
+
+    const searchTokens = this.extractArticleAddressTokens(searchTerm);
+    const candidateTokens = new Set(
+      this.extractArticleAddressTokens(candidateAddress),
+    );
+    if (searchTokens.length === 0 || candidateTokens.size === 0) {
+      return false;
+    }
+
+    const overlapCount = searchTokens.filter((token) =>
+      candidateTokens.has(token),
+    ).length;
+    return overlapCount / searchTokens.length >= 0.6;
+  }
+
+  filterRealnewsForMatching(list = [], config = {}) {
+    if (!Array.isArray(list) || list.length === 0) {
+      return [];
+    }
+
+    if (!config.only_match_listed_realnews) {
+      return list;
+    }
+
+    return list.filter((item) => Boolean(item?.is_list));
+  }
+
+  selectBestAddressMatch(searchTerm, matches = [], config = {}) {
+    if (!Array.isArray(matches) || matches.length === 0) {
+      return null;
+    }
+
+    const scoredMatches = matches
+      .map((match) => this.scoreAddressCandidate(searchTerm, match, config))
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.accepted !== b.accepted) {
+          return a.accepted ? -1 : 1;
+        }
+        if (b.matchScore !== a.matchScore) {
+          return b.matchScore - a.matchScore;
+        }
+        if (b.exactTextScore !== a.exactTextScore) {
+          return b.exactTextScore - a.exactTextScore;
+        }
+        return 0;
+      });
+
+    return scoredMatches[0] || null;
+  }
+
+  getBuildingSearchAddress(item) {
+    return this.cleanAddressForMatch(
+      item?.address || item?.address_valid || item?.name || "",
+    );
+  }
+
+  async fuzzySearch(searchTerm, list, config = {}) {
+    // if (searchTerm.includes('Ngõ 52 Quan Nhân')) console.log(searchTerm);
+
+    const processedSearchTerm = this.normalizeSheetCellText(searchTerm);
+    if (!processedSearchTerm) {
+      return null;
+    }
+    const normalizedSearchKey = this.normalizeComparableText(processedSearchTerm);
+    const configuredAliases = config?.address_aliases || {};
+    const aliasSearchTerm =
+      Object.entries(configuredAliases).find(
+        ([alias]) => this.normalizeComparableText(alias) === normalizedSearchKey,
+      )?.[1] || processedSearchTerm;
+    const searchableList = this.filterRealnewsForMatching(list, config).map(
+      (item) => ({
+        ...item,
+        address: item?.address || item?.address_valid || item?.name || "",
+        searchableAddress: this.getBuildingSearchAddress(item),
+      }),
+    );
+    const selectedResult = this.selectBestAddressMatch(
+      aliasSearchTerm,
+      searchableList,
+      config,
+    );
+    if (selectedResult?.item) {
+      const normalizedSearchTerm = this.normalizeComparableText(processedSearchTerm);
+      const normalizedCandidateAddress = this.normalizeComparableText(
+        selectedResult.candidateVariant || "",
+      );
+      const keywordTokens = this.extractAddressKeywordTokens(processedSearchTerm);
+      if (
+        config?.require_address_detail_for_match &&
+        normalizedSearchTerm &&
+        !/\d/.test(normalizedSearchTerm) &&
+        keywordTokens.length <= 1 &&
+        normalizedSearchTerm !== normalizedCandidateAddress
+      ) {
+        console.warn(
+          `[address-match] Bo qua match "${searchTerm}" vi dia chi qua chung chung cho ${config?.web || "sheet"} (${selectedResult.candidateVariant})`,
+        );
+        return null;
+      }
+    }
+    if (selectedResult?.accepted && selectedResult?.item) {
+      console.log(
+        `Chuoi gan nhat: ${selectedResult.candidateVariant} voi chuoi goc ${searchTerm} (match score: ${selectedResult.matchScore.toFixed(2)})`,
+      );
+      return selectedResult.item;
+    }
+    if (selectedResult?.item) {
+      console.warn(
+        `[address-match] Bo qua match "${searchTerm}" voi dia chi "${selectedResult.candidateVariant}" (score ${selectedResult.matchScore.toFixed(2)}, ly do: ${selectedResult.rejectReason || "threshold"})`,
+      );
+      return null;
     }
     return null;
   }
@@ -276,11 +2627,29 @@ class UpdateRoomSari {
     if (match) {
       return {
         spreadsheetId: match[1],
-        gid: match[2]
+        gid: match[2],
       };
     } else {
       return { spreadsheetId: null, gid: null };
     }
+  }
+
+  buildSheetUrl(baseUrl, gid) {
+    const normalizedGid = String(gid ?? "").trim();
+    if (!normalizedGid || normalizedGid === "0") {
+      return baseUrl;
+    }
+
+    if (/gid=\d+/g.test(baseUrl)) {
+      return baseUrl.replace(/gid=\d+/g, `gid=${normalizedGid}`);
+    }
+
+    if (baseUrl.includes("gid=")) {
+      return baseUrl.replace(/gid=(?=#|$)/g, `gid=${normalizedGid}`);
+    }
+
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}${separator}gid=${normalizedGid}`;
   }
 
   async convertToCSVLink(editUrl) {
@@ -303,8 +2672,14 @@ class UpdateRoomSari {
         const response = await requestFunction();
         return response;
       } catch (error) {
-        if (error.code == "ECONNRESET" && i < retries - 1) {
-          console.warn(`Retrying request (${i + 1}/${retries})...`);
+        if (this.isRetryableRequestError(error) && i < retries - 1) {
+          const { status, code, detail } = this.getRequestErrorSummary(error);
+          const retryLabel = code || status || "UNKNOWN";
+          const delayMs = 500 * (i + 1);
+          console.warn(
+            `Retrying request (${i + 1}/${retries}) after ${retryLabel}: ${detail}`,
+          );
+          await this.sleep(delayMs);
           continue;
         }
         throw error;
@@ -322,7 +2697,9 @@ class UpdateRoomSari {
       const sheets = google.sheets({ version: "v4", auth });
       // 📌 Lấy danh sách sheet để tìm sheet có `gid`
       const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
-      const sheet = sheetInfo.data.sheets.find(s => s.properties.sheetId == targetGid);
+      const sheet = sheetInfo.data.sheets.find(
+        (s) => s.properties.sheetId == targetGid,
+      );
 
       if (!sheet) {
         throw new Error(`Không tìm thấy sheet với gid=${targetGid}`);
@@ -338,7 +2715,10 @@ class UpdateRoomSari {
         includeGridData: true,
         // fields: "sheets.data.rowData.values.effectiveFormat.backgroundColor"
       });
-      const getRows = await sheets.spreadsheets.values.get({ spreadsheetId, range: sheetTitle });
+      const getRows = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: sheetTitle,
+      });
       const rows = getRows.data.values;
       const data = response.data.sheets[0].data[0].rowData;
       if (data && data.length && rows?.length) {
@@ -351,26 +2731,22 @@ class UpdateRoomSari {
               cell?.effectiveFormat?.textFormat?.foregroundColor;
             const backgroundColorHex = backgroundColor
               ? this.rgbaToHex(
-                backgroundColor.red,
-                backgroundColor.green,
-                backgroundColor.blue,
-                backgroundColor.alpha
-              )
+                  backgroundColor.red,
+                  backgroundColor.green,
+                  backgroundColor.blue,
+                  backgroundColor.alpha,
+                )
               : null;
             const textColorHex = textColor
               ? this.rgbaToHex(
-                textColor.red,
-                textColor.green,
-                textColor.blue,
-                textColor.alpha
-              )
+                  textColor.red,
+                  textColor.green,
+                  textColor.blue,
+                  textColor.alpha,
+                )
               : null;
 
-            const hyperlink =
-              cell?.hyperlink ||
-              cell?.textFormatRuns?.find((run) => run.format.link)?.format.link
-                .uri ||
-              null;
+            const hyperlink = this.extractHyperlinkFromCell(cell);
             obj[`field${colIndex}`] = {
               value,
               bgColor: backgroundColorHex,
@@ -387,7 +2763,10 @@ class UpdateRoomSari {
         return [];
       }
     } catch (error) {
-      console.error(`An error occurred in spreadsheets (${spreadsheetId}, ${targetGid}):`, error);
+      console.error(
+        `An error occurred in spreadsheets (${spreadsheetId}, ${targetGid}):`,
+        error,
+      );
     }
   }
 
@@ -428,16 +2807,21 @@ class UpdateRoomSari {
   }
 
   getRangeFromSheetData(data, rangeStr) {
-    const [start, end] = rangeStr.split(':');
+    const [start, end] = rangeStr.split(":");
 
     // Chuyển chữ cột sang số (A => 0, H => 7)
-    const colToIndex = col => {
-      return col.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+    const colToIndex = (col) => {
+      return (
+        col
+          .toUpperCase()
+          .split("")
+          .reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1
+      );
     };
 
-    const getRowCol = ref => {
+    const getRowCol = (ref) => {
       const match = ref.match(/^([A-Z]+)(\d+)$/);
-      if (!match) throw new Error('Invalid cell ref');
+      if (!match) throw new Error("Invalid cell ref");
       const [, col, row] = match;
       return { row: parseInt(row, 10) - 1, col: colToIndex(col) };
     };
@@ -446,26 +2830,26 @@ class UpdateRoomSari {
     const { row: endRow, col: endCol } = getRowCol(end);
 
     // Xử lý mảng object
-    const result = data.slice(startRow, endRow + 1).map(rowObj => {
+    const result = data.slice(startRow, endRow + 1).map((rowObj) => {
       const row = [];
       for (let i = startCol; i <= endCol; i++) {
-        row.push(rowObj[`field${i}`].value || '');
+        row.push(rowObj[`field${i}`].value || "");
       }
       return row;
     });
 
-    return result.join('. ');
+    return result.join(". ");
   }
 
   async readGoogleDocByLink(docUrl) {
     if (docUrl == null || docUrl == undefined) return "";
     if (!docUrl.startsWith("https://docs.google.com/document/d/")) {
-      return ""
+      return "";
     }
     const documentId = this.extractDocumentId(docUrl);
 
     if (!documentId) {
-      return ""
+      return "";
     }
 
     // Xác thực OAuth2
@@ -473,13 +2857,16 @@ class UpdateRoomSari {
       keyFile: "ggsheets.json", // thay bằng path thật
       scopes: [
         "https://www.googleapis.com/auth/documents.readonly",
-        "https://www.googleapis.com/auth/drive.readonly"
+        "https://www.googleapis.com/auth/drive.readonly",
       ],
     });
 
     try {
       const drive = google.drive({ version: "v3", auth });
-      const metadata = await drive.files.get({ fileId: documentId, fields: "mimeType, name" });
+      const metadata = await drive.files.get({
+        fileId: documentId,
+        fields: "mimeType, name",
+      });
 
       let text = "";
       if (metadata.data.mimeType === "application/vnd.google-apps.document") {
@@ -496,25 +2883,32 @@ class UpdateRoomSari {
           }
         }
       } else if (
-        metadata.data.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        metadata.data.mimeType ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
         metadata.data.mimeType === "application/msword"
       ) {
         // Tải file .docx / .doc về dưới dạng buffer và đọc bằng mammoth
         const res = await drive.files.get(
           { fileId: documentId, alt: "media" },
-          { responseType: "arraybuffer" }
+          { responseType: "arraybuffer" },
         );
-        const result = await mammoth.extractRawText({ buffer: Buffer.from(res.data) });
+        const result = await mammoth.extractRawText({
+          buffer: Buffer.from(res.data),
+        });
         text = result.value;
       } else {
-        console.warn(`⚠️ Bỏ qua: File "${metadata.data.name}" (${documentId}) là định dạng ${metadata.data.mimeType}, không hỗ trợ đọc nội dung.`);
+        console.warn(
+          `⚠️ Bỏ qua: File "${metadata.data.name}" (${documentId}) là định dạng ${metadata.data.mimeType}, không hỗ trợ đọc nội dung.`,
+        );
         return "";
       }
 
       return text;
     } catch (error) {
       if (error.code === 403 || error.code === 404) {
-        console.error(`❌ Không có quyền truy cập hoặc không tìm thấy Doc: ${docUrl}`);
+        console.error(
+          `❌ Không có quyền truy cập hoặc không tìm thấy Doc: ${docUrl}`,
+        );
       } else {
         console.error(`❌ Lỗi khi đọc Doc (${docUrl}): ${error.message}`);
       }
@@ -527,22 +2921,25 @@ class UpdateRoomSari {
       value == null || // null hoặc undefined
       (typeof value === "string" && value.trim() === "") ||
       (Array.isArray(value) && value.length === 0) ||
-      (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)
+      (typeof value === "object" &&
+        !Array.isArray(value) &&
+        Object.keys(value).length === 0)
     );
   }
 
-  async processCsvData(huydev) {
+  async processCsvData(huydev, idSheetUrl = null) {
     try {
       let sheetData;
+      const sheetUrl = this.buildSheetUrl(huydev.link, idSheetUrl);
       if (huydev.if == "caocap") {
         const { spreadsheetId, gid } = await this.extractGoogleSheetInfo(
-          huydev.link
+          sheetUrl,
         );
         sheetData = await this.spreadsheets(spreadsheetId, gid);
       }
 
       if (huydev.if == "binhthuong") {
-        const csvUrl = await this.convertToCSVLink(huydev.link);
+        const csvUrl = await this.convertToCSVLink(sheetUrl);
         const response = await axios.get(csvUrl);
         const data = await csvtojson().fromString(response.data);
 
@@ -552,20 +2949,29 @@ class UpdateRoomSari {
         sheetData = xlsx.utils.sheet_to_json(worksheet);
       }
       if (!sheetData) {
-        return []
+        return [];
       }
       let results = sheetData;
 
-      let header = []
+      let header = [];
       if (huydev.header) {
         header = results[huydev.header];
       }
       // Ghi nhận tổng số phòng ban đầu (trước khi lọc theo trạng thái exit/kín)
-      let initialValidRooms = results.filter(row => {
-        let addr = row[`field${huydev.address_column[0]}`]?.value;
-        if (!addr || addr.toLowerCase().trim() === "địa chỉ") return false;
-        let room = row[`field${huydev.room_column[0]}`]?.value;
-        return room ? true : false;
+      let initialValidRooms = results.filter((row) => {
+        const rawAddress =
+          this.composeAddressFromColumns(row, huydev.address_column) ||
+          row[`field${huydev.address_column[0]}`]?.value ||
+          "";
+        const rawRoom = row[`field${huydev.room_column[0]}`]?.value || "";
+        if (!rawAddress || !rawRoom) {
+          return false;
+        }
+
+        return !(
+          this.isLikelySheetNoteAddress(rawAddress) ||
+          this.isLikelySheetNoiseRoom(rawRoom)
+        );
       }).length;
       huydev.totalPhongLayDuoc = initialValidRooms;
 
@@ -574,8 +2980,8 @@ class UpdateRoomSari {
         results = results.filter(
           (row) =>
             !huydev.exitBackgroundColor.includes(
-              row[`field${huydev.exitColumnColor}`]?.bgColor
-            )
+              row[`field${huydev.exitColumnColor}`]?.bgColor,
+            ),
         );
       }
       // text color
@@ -583,18 +2989,36 @@ class UpdateRoomSari {
         results = results.filter(
           (row) =>
             !huydev.exitTextColor.includes(
-              row[`field${huydev.exitColumnColor}`]?.textColor
-            )
+              row[`field${huydev.exitColumnColor}`]?.textColor,
+            ),
         );
       }
       // text
       if (huydev.exitColumn !== null && huydev.exit.length > 0) {
-        let exit = (huydev.exit || []).map(item => item?.toLowerCase().trim());
-        results = results.filter((row) => {
-          let cellValue = row[`field${huydev.exitColumn}`]?.value;
-          let text = cellValue ? cellValue.toString().trim().toLowerCase() : "";
-          return !exit.includes(text);
-        });
+        const exitKeywords = (huydev.exit || [])
+          .flatMap((item) =>
+            item === undefined || item === null
+              ? []
+              : item.toString().split(/[;,|]/),
+          )
+          .map((item) => this.normalizeComparableText(item))
+          .filter(Boolean);
+
+        if (exitKeywords.length > 0) {
+          results = results.filter((row) => {
+            const cellValue = row[`field${huydev.exitColumn}`]?.value;
+            const normalizedCellValue = this.normalizeComparableText(cellValue);
+            if (!normalizedCellValue) {
+              return true;
+            }
+
+            return !exitKeywords.some(
+              (keyword) =>
+                normalizedCellValue === keyword ||
+                normalizedCellValue.includes(keyword),
+            );
+          });
+        }
       }
 
       // address ngang thành dọc
@@ -621,10 +3045,10 @@ class UpdateRoomSari {
         ...huydev.address_column,
         ...huydev.room_column,
         ...huydev.building_code_column,
-        ...huydev.price_column
+        ...huydev.price_column,
       ];
       const findDouble = this.getAllDuplicateIndexes(combinedColumns);
-      let datas = []
+      let datas = [];
       let count = 0;
       let address;
       for (let row of results) {
@@ -632,18 +3056,43 @@ class UpdateRoomSari {
         // if(huydev?.header && count <= huydev.header) {
         //   continue; // Bỏ qua các hàng trước header
         // }
-        if (!this.isEmpty(huydev?.columnVertical) && !this.isEmpty(huydev?.colorExitVerticalBg)) {
-          if (row[`field${huydev.columnVertical}`]?.bgColor.includes(huydev.colorExitVerticalBg)) {
-            address = row[`field${huydev.columnVertical}`]?.value;
-            if (address.includes(":")) {
-              address = address.split(":")[1].trim(); // Lấy phần sau dấu ":"
+        if (
+          !this.isEmpty(huydev?.columnVertical) &&
+          !this.isEmpty(huydev?.colorExitVerticalBg)
+        ) {
+          const verticalCell = row[`field${huydev.columnVertical}`];
+          const rowBgColor = (verticalCell?.bgColor || "").toLowerCase();
+          const markerBgColor = (huydev.colorExitVerticalBg || "")
+            .toString()
+            .toLowerCase();
+          if (rowBgColor && rowBgColor.includes(markerBgColor)) {
+            address = this.normalizeSheetCellText(verticalCell?.value);
+            if (address && address.includes(":")) {
+              address = address.split(":").slice(1).join(":").trim(); // Lấy phần sau dấu ":" đầu tiên
             }
             continue; // Bỏ qua các hàng có màu nền đã chỉ định
           }
         } else {
           let tempAddr = row[`field${huydev.address_column[0]}`]?.value; // Lấy địa chỉ từ cột đã chỉ định
-          if (tempAddr !== undefined && tempAddr !== null && tempAddr.toString().trim() !== "") {
+          if (
+            tempAddr !== undefined &&
+            tempAddr !== null &&
+            tempAddr.toString().trim() !== ""
+          ) {
             address = tempAddr;
+          }
+        }
+
+        if (
+          this.isEmpty(huydev?.columnVertical) ||
+          this.isEmpty(huydev?.colorExitVerticalBg)
+        ) {
+          const composedAddress = this.composeAddressFromColumns(
+            row,
+            huydev.address_column,
+          );
+          if (composedAddress) {
+            address = composedAddress;
           }
         }
 
@@ -668,18 +3117,33 @@ class UpdateRoomSari {
             }
 
             // Prioritize Google Doc content
-            if (hyperlink && hyperlink.includes("docs.google.com/document/d/")) {
+            if (
+              hyperlink &&
+              hyperlink.includes("docs.google.com/document/d/")
+            ) {
               const content = await this.readGoogleDocByLink(hyperlink);
               if (content) docContents.push(content);
-            } else if (cellValue && cellValue.toString().includes("docs.google.com/document/d/")) {
-              const urlMatch = cellValue.toString().match(/https:\/\/docs\.google\.com\/document\/d\/[a-zA-Z0-9_-]+/);
+            } else if (
+              cellValue &&
+              cellValue.toString().includes("docs.google.com/document/d/")
+            ) {
+              const urlMatch = cellValue
+                .toString()
+                .match(
+                  /https:\/\/docs\.google\.com\/document\/d\/[a-zA-Z0-9_-]+/,
+                );
               if (urlMatch) {
                 const content = await this.readGoogleDocByLink(urlMatch[0]);
                 if (content) docContents.push(content);
               }
             } else if (cellValue) {
-              const headerVal = (typeof item === "number") ? (header[`field${item}`]?.value || "") : "";
-              textContents.push(headerVal ? `${headerVal}: ${cellValue}` : cellValue);
+              const headerVal =
+                typeof item === "number"
+                  ? header[`field${item}`]?.value || ""
+                  : "";
+              textContents.push(
+                headerVal ? `${headerVal}: ${cellValue}` : cellValue,
+              );
             }
           }
 
@@ -690,43 +3154,116 @@ class UpdateRoomSari {
         const priceCols = huydev.price_column;
         const bldCol = huydev.building_code_column[0];
 
-        const buildingCode = (bldCol !== null && row[`field${bldCol}`]?.value) ? row[`field${bldCol}`]?.value : null;
+        const buildingCode =
+          bldCol !== null && row[`field${bldCol}`]?.value
+            ? row[`field${bldCol}`]?.value
+            : null;
 
         roomCols.forEach((roomCol, i) => {
-          const priceCol = (priceCols && priceCols[i] !== undefined) ? priceCols[i] : (priceCols ? priceCols[0] : null);
+          const priceCol =
+            priceCols && priceCols[i] !== undefined
+              ? priceCols[i]
+              : priceCols
+                ? priceCols[0]
+                : null;
           if (roomCol === null || !row[`field${roomCol}`]?.value) return;
 
-          let roomRaw = row[`field${roomCol}`]?.value;
-          let priceRaw = (priceCol !== null) ? row[`field${priceCol}`]?.value : null;
+          const roomEntries = this.extractRoomPriceEntries(
+            row[`field${roomCol}`]?.value,
+            priceCol !== null ? row[`field${priceCol}`]?.value : null,
+            roomCol,
+            priceCol,
+            huydev,
+          );
 
-          if (huydev.metadata && roomCol === priceCol) {
-            const parts = roomRaw.toString().split(huydev.metadata.split);
-            if (parts.length > 1) {
-              // Based on old logic: ROOM is at index 1, PRICE is at index 3.
-              // If metadata.before === 1, ROOM takes parts[0], PRICE takes parts[1].
-              roomRaw = parts[huydev.metadata.before === 1 ? 0 : 1]?.trim();
-              priceRaw = parts[huydev.metadata.before === 3 ? 0 : 1]?.trim();
+          roomEntries.forEach((entry) => {
+            const normalizedRoomRaw = this.normalizeRoomValue(
+              entry.roomRaw,
+              huydev,
+            );
+            if (
+              !normalizedRoomRaw ||
+              this.isLikelySheetNoteAddress(address) ||
+              this.isLikelySheetNoiseRoom(normalizedRoomRaw)
+            ) {
+              return;
             }
-          }
 
-          datas.push({
-            ADDRESS: address,
-            IMAGE_DRIVER: row[`field${huydev.exitLinkDriver}`]?.hyperlink,
-            PRICE: this.convertPrice(priceRaw) * (huydev?.hesogia || 1),
-            ROOMS: roomRaw,
-            DESCRIPTIONS: description,
-            BUILDING: buildingCode,
+            const priceResolution = this.resolvePriceRawByCurrencyPreference(
+              entry.priceRaw,
+              huydev,
+            );
+            const finalPriceRaw = priceResolution.priceRaw || entry.priceRaw;
+            const usdOnlyDescriptionNote = this.normalizeSheetCellText(
+              huydev?.usd_only_description_note,
+            );
+            let finalDescription = description;
+            if (priceResolution.isUsdOnly && usdOnlyDescriptionNote) {
+              const normalizedDescription =
+                this.normalizeComparableText(finalDescription);
+              const normalizedUsdOnlyDescriptionNote =
+                this.normalizeComparableText(usdOnlyDescriptionNote);
+              if (
+                !normalizedDescription ||
+                !normalizedDescription.includes(normalizedUsdOnlyDescriptionNote)
+              ) {
+                finalDescription = finalDescription
+                  ? `${finalDescription}. ${usdOnlyDescriptionNote}`
+                  : usdOnlyDescriptionNote;
+              }
+            }
+
+            datas.push({
+              ADDRESS: address,
+              IMAGE_DRIVER:
+                row[`field${huydev.exitLinkDriver}`]?.hyperlink ||
+                this.extractImageSourceLink(
+                  row[`field${huydev.exitLinkDriver}`]?.value || "",
+                ),
+              PRICE:
+                this.normalizePriceValue(finalPriceRaw, huydev) *
+                (huydev?.hesogia || 1),
+              ROOMS: normalizedRoomRaw,
+              DESCRIPTIONS: finalDescription,
+              BUILDING: buildingCode,
+            });
           });
         });
       }
-      datas = datas.filter(
-        (row) =>
-          !row ||
-          !row.ADDRESS ||
-          !row.ROOMS ||
-          row.ADDRESS.toLowerCase().trim() !== "địa chỉ" ||
-          row.ADDRESS.toLowerCase().trim() !== ''
-      );
+      datas = datas.filter((row) => {
+        if (!row || !row.ADDRESS || !row.ROOMS) {
+          return false;
+        }
+
+        const normalizedAddress = this.removeVietnameseTonesSync(
+          this.cleanAddressForMatch(row.ADDRESS),
+        ).toLowerCase();
+        const normalizedRooms = this.removeVietnameseTonesSync(
+          row.ROOMS.toString().trim(),
+        ).toLowerCase();
+
+        if (!normalizedAddress || !normalizedRooms) {
+          return false;
+        }
+
+        if (
+          this.isLikelySheetNoteAddress(row.ADDRESS) ||
+          this.isLikelySheetNoiseRoom(row.ROOMS)
+        ) {
+          return false;
+        }
+
+        if (
+          normalizedAddress === "dia chi" ||
+          normalizedAddress === "co so" ||
+          normalizedAddress.includes("dia chi toa nha") ||
+          normalizedRooms.includes("so phong")
+        ) {
+          return false;
+        }
+
+        return true;
+      });
 
       return datas;
     } catch (error) {
@@ -758,120 +3295,182 @@ class UpdateRoomSari {
       let totalTrong = 0;
       let totalTaoMoi = 0;
       let cdtStats = {};
+      const countedTotalDongKeys = new Set();
 
       await fs.writeFile("thong_ke.txt", "");
       await sendTelegramMessage("Bắt đầu cập nhật...");
+      if (this.RUN_ONLY_IDS.length > 0) {
+        console.log(
+          `[config] Chạy giới hạn cho ID: ${this.RUN_ONLY_IDS.join(", ")}`,
+        );
+      }
       let investors = [];
-      let flag = false
+      let flag = false;
       for (let huydev of this.LIST_GGSHEET) {
-        if (flag || huydev.id >= this.START_ID) {
-          flag = true
-        } else {
-          continue
+        if (
+          this.RUN_ONLY_IDS.length > 0 &&
+          !this.RUN_ONLY_IDS.includes(Number(huydev.id))
+        ) {
+          continue;
+        }
+        if (this.RUN_ONLY_IDS.length === 0) {
+          if (flag || huydev.id >= this.START_ID) {
+            flag = true;
+          } else {
+            continue;
+          }
         }
 
         if (!cdtStats[huydev.id]) {
-          cdtStats[huydev.id] = { trong: 0, taoMoi: 0, error: false, empty: true, totalDong: 0, link: huydev.link };
+          cdtStats[huydev.id] = {
+            trong: 0,
+            taoMoi: 0,
+            error: false,
+            empty: true,
+            totalDong: 0,
+            link: huydev.link,
+          };
         }
 
         let missingAddresses = new Set();
+        const executionKey = this.getSheetExecutionKey(huydev);
 
         console.log(
-          `------------------------------------------------------- ${huydev.web} ------------------------------------------------------------------ `
+          `------------------------------------------------------- ${executionKey} ------------------------------------------------------------------ `,
         );
         const formattedDate = this.getFormattedDate();
-        const entryExitsRun = `${huydev.web}|${formattedDate}|TRUE`;
+        const entryExitsRun = `${executionKey}|${formattedDate}|TRUE`;
         const exitRunMismatch = await this.checkIfEntryExists(
           "exits.txt",
-          entryExitsRun
+          entryExitsRun,
         );
         if (!exitRunMismatch) {
-          // run 
+          // run
           try {
             for (let idSheetUrl of huydev.list_address) {
               const searchRealnews = await this.searchRealnewByInvestor(
-                huydev.id
+                huydev.id,
               );
-              console.log(`[DEBUG] CDT ${huydev.id} found ${searchRealnews.content.length} buildings on web.`);
-              searchRealnews.content.forEach(b => console.log(`  - Web Building: ${b.id} | ${b.code} | ${b.address_valid}`));
+              console.log(
+                `[DEBUG] CDT ${huydev.id} found ${searchRealnews.content.length} buildings on web.`,
+              );
+              searchRealnews.content.forEach((b) =>
+                console.log(
+                  `  - Web Building: ${b.id} | ${b.code} | ${b.address_valid}`,
+                ),
+              );
 
               if (huydev?.id && !investors.includes(huydev.id)) {
                 // update all room of realnews kín
                 for (let item of searchRealnews.content) {
                   const searchRooms = await this.searchRoom(item.id);
-                  console.log(`Đang cập nhật phòng kín cho tòa nhà ${item.id} - ${item.code} - ${item.address_valid} - ${searchRooms?.content?.length} phòng`);
+                  console.log(
+                    `Đang cập nhật phòng kín cho tòa nhà ${item.id} - ${item.code} - ${item.address_valid} - ${searchRooms?.content?.length} phòng`,
+                  );
                   await this.updateRoomByRealnew(searchRooms?.content || []);
                 }
                 investors.push(huydev.id);
               }
 
               const processedData = await this.processCsvData(
-                huydev
+                huydev,
+                idSheetUrl,
               );
               if (!processedData) {
-                console.log("link bảng hàng::", huydev.link);
+                console.log(
+                  "link bảng hàng::",
+                  this.buildSheetUrl(huydev.link, idSheetUrl),
+                );
                 console.log("Bảng hàng này bị lỗi trên ggsheet.");
                 cdtStats[huydev.id].error = true;
                 break;
               }
               console.log("SỐ LƯỢNG BẢNG HÀNG ", processedData?.length);
 
-
               if (processedData?.length > 0) {
-                cdtStats[huydev.id].totalDong += (huydev.totalPhongLayDuoc || processedData.length);
+                const totalDongKey = `${huydev.id}|${huydev.link}|${idSheetUrl}`;
+                const allowDuplicateRoomNames = Boolean(
+                  huydev.allow_duplicate_room_names,
+                );
+                const roomAllocationPool = new Map();
+                if (!countedTotalDongKeys.has(totalDongKey)) {
+                  cdtStats[huydev.id].totalDong +=
+                    huydev.totalPhongLayDuoc || processedData.length;
+                  countedTotalDongKeys.add(totalDongKey);
+                }
                 cdtStats[huydev.id].empty = false;
                 for (let row of processedData) {
-
                   if (
                     row.hasOwnProperty("ADDRESS") &&
                     row.hasOwnProperty("ROOMS") &&
                     row["ADDRESS"] !== ""
                   ) {
                     if (row["ADDRESS"] && row["ROOMS"]) {
-                      console.log(`[DEBUG] Row processing: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`);
+                      console.log(
+                        `[DEBUG] Row processing: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`,
+                      );
                       if (searchRealnews && searchRealnews.content.length > 0) {
-                        const item = await this.fuzzySearch(row["ADDRESS"], searchRealnews.content)
+                        const item = await this.fuzzySearch(
+                          row["ADDRESS"],
+                          searchRealnews.content,
+                          huydev,
+                        );
                         if (item) {
-                          console.log(`[DEBUG] Matched "${row["ADDRESS"]}" to building ${item.id} (${item.address_valid})`);
+                          console.log(
+                            `[DEBUG] Matched "${row["ADDRESS"]}" to building ${item.id} (${item.address_valid})`,
+                          );
                           const searchRooms = await this.searchRoom(item.id);
 
                           if (searchRooms?.content) {
                             // cập nhật room
                             const roomsInput = this.convertRoom(row["ROOMS"]);
                             const matchedRoomIds = new Set();
+                            const allocatedRoomIds = this.getAllocatedRoomIds(
+                              roomAllocationPool,
+                              item.id,
+                            );
                             for (const roomRef of roomsInput) {
-                              const roomNumbersArray = await this.replaceAbbreviations(
-                                roomRef,
-                                huydev.type
-                              );
+                              const roomNumbersArray =
+                                await this.replaceAbbreviations(
+                                  roomRef,
+                                  huydev.type,
+                                );
 
                               for (const roomNumber of roomNumbersArray) {
-                                const room = searchRooms?.content.find(
-                                  (room) =>
-                                    room.name.trim().toLowerCase() ==
-                                    roomNumber.trim().toLowerCase()
+                                const room = this.findMatchedRoom(
+                                  searchRooms?.content || [],
+                                  roomNumber,
+                                  huydev.type,
+                                  allocatedRoomIds,
+                                  allowDuplicateRoomNames,
                                 );
 
                                 if (room && !matchedRoomIds.has(room.id)) {
                                   matchedRoomIds.add(room.id);
+                                  if (allowDuplicateRoomNames) {
+                                    allocatedRoomIds.add(room.id);
+                                  }
                                   console.log("roomNumber", roomNumber);
                                   // Luôn đếm là phòng trống trong báo cáo nếu thấy trong sheet
                                   this.incrementRunStats(huydev, item, "trong");
 
-                                  const formattedDateIter = this.getFormattedDate();
-                                  const entryContent = `${huydev.link + idSheetUrl
-                                    }|${item.id}|${item.code}|${row["ADDRESS"]
-                                    }|${room.id}|${roomNumber}|${formattedDateIter}`;
+                                  const formattedDateIter =
+                                    this.getFormattedDate();
+                                  const entryContent = `${
+                                    huydev.link + idSheetUrl
+                                  }|${item.id}|${item.code}|${
+                                    row["ADDRESS"]
+                                  }|${room.id}|${roomNumber}|${formattedDateIter}`;
 
                                   const unlockedRoomsContent =
                                     await this.checkIfEntryExists(
                                       "capnhattrong.txt",
-                                      entryContent
+                                      entryContent,
                                     );
 
                                   if (!unlockedRoomsContent) {
                                     console.log(
-                                      `Đã tìm thấy phòng ${roomNumber}, đang gọi unlockRoom...`
+                                      `Đã tìm thấy phòng ${roomNumber}, đang gọi unlockRoom...`,
                                     );
                                     await this.updateRoom_RONG_PRICE_FB_DRIVER(
                                       room,
@@ -879,66 +3478,125 @@ class UpdateRoomSari {
                                       item,
                                       huydev,
                                       idSheetUrl,
-                                      roomNumber
+                                      roomNumber,
                                     );
                                   } else {
                                     console.log(
-                                      `Phòng ${roomNumber} có ID ${room.id} đã được mở khóa.`
+                                      `Phòng ${roomNumber} có ID ${room.id} đã được mở khóa.`,
                                     );
                                   }
                                 } else if (!room) {
                                   // Logic tạo phòng mới nếu không tìm thấy room pattern trên web
                                   // Nhưng chỉ tạo nếu roomNumber này chưa được tạo/xử lý
                                   const formattedDate = this.getFormattedDate();
-                                  const entryContentNotRoom = `${huydev.link + idSheetUrl
-                                    }|${item.code}|${row["ADDRESS"]
-                                    }|${roomNumber}|${formattedDate}`;
+                                  const entryAddressContent = `${
+                                    huydev.link + idSheetUrl
+                                  }|${item.code}|${row["ADDRESS"]}|${roomNumber}|${formattedDate}`;
 
-                                  const notFoundRoom =
+                                  const roomCreatedToday =
                                     await this.checkIfEntryExists(
                                       "phongmoi.txt",
-                                      entryContentNotRoom
+                                      entryAddressContent,
                                     );
 
-                                  if (!notFoundRoom) {
+                                  if (!roomCreatedToday) {
                                     // Tạo phòng mới... (Omitted for brevity, but I should keep it)
 
                                     let data = {
-                                      "real_new_id": item.id,
-                                      "name": roomNumber,
-                                      "price": row["PRICE"] || 0,
-                                      "rent_price_hour": 0,
-                                      "rent_price_day": 0,
-                                      "area": 0,
-                                      "status": "con",
-                                      "empty_room_date": dayjs(new Date()).format('YYYY-MM-DD'),
-                                      "image_link": room?.image_link || row["IMAGE_DRIVER"],
-                                      "origin_link": row["IMAGE_DRIVER"] || "",
-                                      "is_deleted": false,
-                                      "description": row["DESCRIPTIONS"] || "",
+                                      real_new_id: item.id,
+                                      name: roomNumber,
+                                      price: row["PRICE"] || 0,
+                                      rent_price_hour: 0,
+                                      rent_price_day: 0,
+                                      area: 0,
+                                      status: "con",
+                                      empty_room_date: dayjs(new Date()).format(
+                                        "YYYY-MM-DD",
+                                      ),
+                                      image_link:
+                                        room?.image_link || row["IMAGE_DRIVER"],
+                                      origin_link: row["IMAGE_DRIVER"] || "",
+                                      is_deleted: false,
+                                      description: this.sanitizeTextForLegacyApi(
+                                        row["DESCRIPTIONS"] || "",
+                                      ),
                                     };
                                     const res = await this.createRoom(data);
-                                    if (res) {
-                                      this.incrementRunStats(huydev, item, "taoMoi");
-                                      this.incrementRunStats(huydev, item, "trong");
+                                    if (!res?.id) {
+                                      const createErrorSummary = this.formatErrorForLog(
+                                        [res?.status, res?.code, res?.detail]
+                                          .filter(Boolean)
+                                          .join(" | "),
+                                      );
+                                      await this.appendToFile(
+                                        "taophongloi.txt",
+                                        `${huydev.link + idSheetUrl}|${item.code}|${
+                                          row["ADDRESS"]
+                                        }|${roomNumber}|${
+                                          createErrorSummary
+                                            ? "CREATE_ROOM_FAILED"
+                                            : "CREATE_ROOM_NULL"
+                                        }|${
+                                          formattedDate
+                                        }|${huydev.web}${
+                                          createErrorSummary
+                                            ? `|${createErrorSummary}`
+                                            : ""
+                                        }\n`,
+                                      );
+                                      console.error(
+                                        `Tạo phòng ${roomNumber} thất bại cho tòa ${item.code}. ${createErrorSummary}`,
+                                      );
+                                      continue;
                                     }
-                                    await this.updateRoom_RONG_PRICE_FB_DRIVER(
-                                      res,
-                                      row,
-                                      item,
-                                      huydev,
-                                      idSheetUrl,
-                                      roomNumber
-                                    );
+                                    if (
+                                      allowDuplicateRoomNames &&
+                                      res?.id !== undefined &&
+                                      res?.id !== null
+                                    ) {
+                                      allocatedRoomIds.add(res.id);
+                                    }
+                                    if (Array.isArray(searchRooms?.content)) {
+                                      searchRooms.content.push(res);
+                                    }
+                                    this.incrementRunStats(huydev, item, "taoMoi");
+                                    this.incrementRunStats(huydev, item, "trong");
                                     await this.appendToFile(
                                       "phongmoi.txt",
-                                      `${huydev.link + idSheetUrl}|${item.code}|${row["ADDRESS"]
-                                      }|${res?.id}|${roomNumber}|${formattedDate}|${huydev.web
-                                      } ${res ? "Tạo phòng mới thành công" : "Tạo phòng mới thất bại"}\n`
+                                      `${huydev.link + idSheetUrl}|${item.code}|${
+                                        row["ADDRESS"]
+                                      }|${res?.id}|${roomNumber}|${formattedDate}|${
+                                        huydev.web
+                                      } Tạo phòng mới thành công\n`,
                                     );
+                                    try {
+                                      await this.updateRoom_RONG_PRICE_FB_DRIVER(
+                                        res,
+                                        row,
+                                        item,
+                                        huydev,
+                                        idSheetUrl,
+                                        roomNumber,
+                                      );
+                                    } catch (updateError) {
+                                      await this.appendToFile(
+                                        "taophongloi.txt",
+                                        `${huydev.link + idSheetUrl}|${item.code}|${
+                                          row["ADDRESS"]
+                                        }|${roomNumber}|UPDATE_NEW_ROOM_FAILED|${
+                                          formattedDate
+                                        }|${huydev.web}|${
+                                          updateError?.message || updateError
+                                        }\n`,
+                                      );
+                                      console.error(
+                                        `Tạo phòng ${roomNumber} thành công nhưng cập nhật sau tạo thất bại:`,
+                                        updateError?.message || updateError,
+                                      );
+                                    }
                                   } else {
                                     console.log(
-                                      `Phòng này ${roomNumber} đã tồn tại trong phongmoi.txt`
+                                      `Phòng này ${roomNumber} đã tồn tại trong phongmoi.txt`,
                                     );
                                   }
                                 }
@@ -946,17 +3604,18 @@ class UpdateRoomSari {
                             }
                           } else {
                             console.log(
-                              "No rooms found or searchRooms.content is undefined."
+                              "No rooms found or searchRooms.content is undefined.",
                             );
                           }
                         } else {
                           const formattedDate = this.getFormattedDate();
-                          const entryAddressContent = `${huydev.link + idSheetUrl
-                            }|${row["ADDRESS"]}|${formattedDate}`;
+                          const entryAddressContent = `${
+                            huydev.link + idSheetUrl
+                          }|${row["ADDRESS"]}|${formattedDate}`;
 
                           const noAddress = await this.checkIfEntryExists(
                             "nhamoi.txt",
-                            entryAddressContent
+                            entryAddressContent,
                           );
 
                           if (!noAddress) {
@@ -964,7 +3623,10 @@ class UpdateRoomSari {
                             console.log(`\x1b[31m[DANGER] ${errorMsg}\x1b[0m`);
                             // await sendTelegramMessage(errorMsg);
                             missingAddresses.add(row["ADDRESS"]);
-                            await this.appendToFile("thong_ke.txt", `${this.getFormattedDate()} - KHÔNG TÌM THẤY ĐỊA CHỈ: ${row["ADDRESS"]} - ${huydev.web}\n`);
+                            await this.appendToFile(
+                              "thong_ke.txt",
+                              `${this.getFormattedDate()} - KHÔNG TÌM THẤY ĐỊA CHỈ: ${row["ADDRESS"]} - ${huydev.web}\n`,
+                            );
 
                             const formattedDate = this.getFormattedDate();
 
@@ -1031,74 +3693,87 @@ class UpdateRoomSari {
                             // const res = await this.createRealnew(data);
                             await this.appendToFile(
                               "nhamoi.txt",
-                              `${huydev.link + idSheetUrl}|${row["ADDRESS"]}|${formattedDate}|${huydev.web} \n `
+                              `${huydev.link + idSheetUrl}|${row["ADDRESS"]}|${formattedDate}|${huydev.web} \n `,
                             );
                           } else {
                             console.log(
-                              "Không tìm thấy địa chỉ trùng tên trong web."
+                              "Không tìm thấy địa chỉ trùng tên trong web.",
                             );
                           }
                         }
                       } else {
                         console.log(
-                          "Tìm kiếm " + row["ADDRESS"] + "phòng " + row["ROOMS"],
-                          searchRealnews.content
+                          "Tìm kiếm " +
+                            row["ADDRESS"] +
+                            "phòng " +
+                            row["ROOMS"],
+                          searchRealnews.content,
                         );
 
                         const formattedDate = this.getFormattedDate();
-                        const entryHollowContent = `${huydev.link + idSheetUrl}|${row["ADDRESS"]
-                          }|${row["ROOMS"]}|${formattedDate}`;
+                        const entryHollowContent = `${huydev.link + idSheetUrl}|${
+                          row["ADDRESS"]
+                        }|${row["ROOMS"]}|${formattedDate}`;
 
-                        const arrayHollowAddress = await this.checkIfEntryExists(
-                          "khongcodulieu.txt",
-                          entryHollowContent
-                        );
+                        const arrayHollowAddress =
+                          await this.checkIfEntryExists(
+                            "khongcodulieu.txt",
+                            entryHollowContent,
+                          );
 
                         if (!arrayHollowAddress) {
                           const formattedDate = this.getFormattedDate();
                           await this.appendToFile(
                             "khongcodulieu.txt",
-                            `${huydev.link + idSheetUrl}|${row["ADDRESS"]}|${row["ROOMS"]
-                            }|${formattedDate}|${huydev.web}\n`
+                            `${huydev.link + idSheetUrl}|${row["ADDRESS"]}|${
+                              row["ROOMS"]
+                            }|${formattedDate}|${huydev.web}\n`,
                           );
 
                           const errorMsg = `⚠️ KHÔNG CÓ DỮ LIỆU TÒA NHÀ TRÊN WEB: ${row["ADDRESS"]} (Bảng hàng: ${huydev.web})`;
                           console.log(`\x1b[31m[DANGER] ${errorMsg}\x1b[0m`);
                           // await sendTelegramMessage(errorMsg);
                           missingAddresses.add(row["ADDRESS"]);
-                          await this.appendToFile("thong_ke.txt", `${this.getFormattedDate()} - KHÔNG CÓ DỮ LIỆU TÒA NHÀ TRÊN WEB: ${row["ADDRESS"]} - ${huydev.web}\n`);
+                          await this.appendToFile(
+                            "thong_ke.txt",
+                            `${this.getFormattedDate()} - KHÔNG CÓ DỮ LIỆU TÒA NHÀ TRÊN WEB: ${row["ADDRESS"]} - ${huydev.web}\n`,
+                          );
                         } else {
-                          console.log(`Đã tồn tại dữ liệu trong khongcodulieu.txt`);
+                          console.log(
+                            `Đã tồn tại dữ liệu trong khongcodulieu.txt`,
+                          );
                         }
                       }
                     } else {
                       console.log("Missing data in row:", row);
                       const formattedDate = this.getFormattedDate();
-                      const entryContentroomsMismatch = `${huydev.link + idSheetUrl
-                        }|${row["BUILDING"]}|${row["ADDRESS"]}|${formattedDate}`;
+                      const entryContentroomsMismatch = `${
+                        huydev.link + idSheetUrl
+                      }|${row["BUILDING"]}|${row["ADDRESS"]}|${formattedDate}`;
 
                       const roomsMismatch = await this.checkIfEntryExists(
                         "ggsheet.txt",
-                        entryContentroomsMismatch
+                        entryContentroomsMismatch,
                       );
 
                       if (!roomsMismatch) {
                         const formattedDate = this.getFormattedDate();
                         await this.appendToFile(
                           "ggsheet.txt",
-                          `${huydev.link + idSheetUrl}|${row["BUILDING"]}|${row["ADDRESS"]
-                          }|${formattedDate}|${huydev.web}\n`
+                          `${huydev.link + idSheetUrl}|${row["BUILDING"]}|${
+                            row["ADDRESS"]
+                          }|${formattedDate}|${huydev.web}\n`,
                         );
                       } else {
                         console.log(
-                          `Đã lưu lỗi phòng trống vào file không có phòng ở google sheet.txt`
+                          `Đã lưu lỗi phòng trống vào file không có phòng ở google sheet.txt`,
                         );
                       }
                     }
                   } else {
                     console.log(
                       'Missing "ADDRESS" or "ROOMS" property in row:',
-                      row
+                      row,
                     );
                   }
                 }
@@ -1112,14 +3787,19 @@ class UpdateRoomSari {
                     await this.appendToFile("thong_ke.txt", `${text} \n`);
 
                     if (!cdtStats[stats.cdt]) {
-                      cdtStats[stats.cdt] = { trong: 0, taoMoi: 0, error: false, empty: true, totalDong: 0 };
+                      cdtStats[stats.cdt] = {
+                        trong: 0,
+                        taoMoi: 0,
+                        error: false,
+                        empty: true,
+                        totalDong: 0,
+                      };
                     }
                     cdtStats[stats.cdt].trong += stats.trong;
                     cdtStats[stats.cdt].taoMoi += stats.taoMoi;
                   }
                   this.runStats = {}; // clear for next sheet
                 }
-
               } else {
                 console.log("Không có dữ liệu để xử lý.");
               }
@@ -1127,28 +3807,28 @@ class UpdateRoomSari {
 
             // Gửi báo cáo địa chỉ thiếu sau khi chạy xong 1 CDT
             if (missingAddresses.size > 0) {
-              const missingList = Array.from(missingAddresses).join('\n+ ');
-              const summaryMsg = `❌ DANH SÁCH ĐỊA CHỈ THIẾU (${huydev.web}):\n+ ${missingList}`;
+              const missingList = Array.from(missingAddresses).join("\n+ ");
+              const summaryMsg = `❌ DANH SÁCH ĐỊA CHỈ THIẾU (${executionKey}):\n+ ${missingList}`;
               await sendTelegramMessage(summaryMsg);
             }
             const formattedDate = this.getFormattedDate();
             await this.appendToFile(
               "exits.txt",
-              `${huydev.web}|${formattedDate}|TRUE\n`
+              `${executionKey}|${formattedDate}|TRUE\n`,
             );
           } catch (err) {
-            console.error('Lỗi trong quá trình chạy' + huydev.web, err);
+            console.error("Lỗi trong quá trình chạy" + huydev.web, err);
             cdtStats[huydev.id].error = true;
             const formattedDate = this.getFormattedDate();
             await this.appendToFile(
               "exits.txt",
-              `${huydev.web}|${formattedDate}|FALSE\n`
+              `${executionKey}|${formattedDate}|FALSE\n`,
             );
           }
           // quit
         } else {
           console.log(
-            `Link GGSHEET + ${huydev.web} đã được thực thi. nếu muốn chạy lại vui lòng vào exits.txt để cập nhật thành false hoặc delete.`
+            `Link GGSHEET + ${executionKey} đã được thực thi. nếu muốn chạy lại vui lòng vào exits.txt để cập nhật thành false hoặc delete.`,
           );
         }
       }
@@ -1163,7 +3843,9 @@ class UpdateRoomSari {
         await this.appendToFile("thong_ke.txt", `${fileLine} \n`);
 
         if (cdtStats[cdt].error || cdtStats[cdt].empty) {
-          finalMessages.push(`Mã cdt: ${cdt} không có phòng nào hoặc bị lỗi link`);
+          finalMessages.push(
+            `Mã cdt: ${cdt} không có phòng nào hoặc bị lỗi link`,
+          );
         } else {
           let message = `Mã cdt: ${cdt} | Tổng dòng: ${cdtStats[cdt].totalDong}`;
           if (cdtStats[cdt].trong > 0 || cdtStats[cdt].taoMoi > 0) {
@@ -1178,10 +3860,12 @@ class UpdateRoomSari {
         for (let i = 0; i < finalMessages.length; i += BATCH_SIZE) {
           let chunk = finalMessages.slice(i, i + BATCH_SIZE);
           if (i + BATCH_SIZE >= finalMessages.length) {
-            let finalMessageText = chunk.join('\n') + `\nTổng Trống: ${totalTrong} | Tổng Tạo mới: ${totalTaoMoi} | ${this.getFormattedDate()}`;
+            let finalMessageText =
+              chunk.join("\n") +
+              `\nTổng Trống: ${totalTrong} | Tổng Tạo mới: ${totalTaoMoi} | ${this.getFormattedDate()}`;
             await sendTelegramMessage(finalMessageText);
           } else {
-            let finalMessageText = chunk.join('\n');
+            let finalMessageText = chunk.join("\n");
             await sendTelegramMessage(finalMessageText);
           }
           await this.sleep(1000); // Tránh rate limit telegram khi gửi nhiều
@@ -1196,7 +3880,7 @@ class UpdateRoomSari {
 
       await sendTelegramMessage("Hoàn thành");
     } catch (error) {
-      console.log('Lỗi ngoài cùng', error);
+      console.log("Lỗi ngoài cùng", error);
     }
   }
 
@@ -1207,33 +3891,35 @@ class UpdateRoomSari {
     item,
     huydev,
     idSheetUrl,
-    roomNumber
+    roomNumber,
   ) {
     const formattedDate = this.getFormattedDate();
     await this.unlockRoom(room.id);
 
     await this.appendToFile(
       "capnhattrong.txt",
-      `${huydev.link + idSheetUrl}|${item.id}|${item.code}|${row["ADDRESS"]
-      }|${room.id}|${roomNumber}|${formattedDate}|${huydev.web}\n`
+      `${huydev.link + idSheetUrl}|${item.id}|${item.code}|${
+        row["ADDRESS"]
+      }|${room.id}|${roomNumber}|${formattedDate}|${huydev.web}\n`,
     );
     console.log(`Phòng ${roomNumber} với ID ${room.id} đã được mở khóa.`);
-    let description = room?.description
-    let price = room?.price
+    let description = this.sanitizeTextForLegacyApi(room?.description || "");
+    let price = room?.price;
     if (row["DESCRIPTIONS"]) {
-      description = row["DESCRIPTIONS"]
-      const extension = this.convertDescription2Extension(description)
-      console.log(extension)
+      const rawDescription = row["DESCRIPTIONS"];
+      description = this.sanitizeTextForLegacyApi(rawDescription);
+      const extension = this.convertDescription2Extension(rawDescription);
+      console.log(extension);
       const res = await this.callApi({
-        "domain": `https://apiv1.sari.vn/v1`,
-        "path": `/tag-relations/room/${room.id}`,
-        "method": "PUT",
-        "data": extension
-      })
+        domain: `https://apiv1.sari.vn/v1`,
+        path: `/tag-relations/room/${room.id}`,
+        method: "PUT",
+        data: extension,
+      });
       if (res.status !== 200) {
         console.log("Cập nhật trống thất bại");
       } else {
-        console.log('room.id=>>>>', room.id)
+        console.log("room.id=>>>>", room.id);
         console.log("Cập nhật trống thành công");
       }
     }
@@ -1242,7 +3928,7 @@ class UpdateRoomSari {
     console.log(
       "Giá CŨ ĐÃ EDIT :",
       priceConvert + " Giá WEB SARI :",
-      room.price
+      room.price,
     );
 
     if (room.price !== priceConvert) {
@@ -1250,20 +3936,32 @@ class UpdateRoomSari {
 
       await this.appendToFile(
         "capnhatgia.txt",
-        `${huydev.link + idSheetUrl}|${item.code}|${row["ADDRESS"]
-        }|${room.id}|${roomNumber}|${room.price
-        }(CŨ)|${priceConvert}(MỚI)|${formattedDate}|${huydev.web}\n`
+        `${huydev.link + idSheetUrl}|${item.code}|${
+          row["ADDRESS"]
+        }|${room.id}|${roomNumber}|${
+          room.price
+        }(CŨ)|${priceConvert}(MỚI)|${formattedDate}|${huydev.web}\n`,
       );
     }
 
     await this.updateRoom(room.id, {
       description: description,
       price: price,
+      status: "con",
+      is_deleted: false,
     });
-    console.log(
-      `Phòng ${roomNumber} với ID ${room.id} và đã được cập nhật giá ${row["PRICE"]} và mô tả ${row["DESCRIPTIONS"]} thành công.`
+    await this.updateAndDriver(
+      room,
+      row,
+      roomNumber,
+      huydev,
+      idSheetUrl,
+      item,
+      formattedDate,
     );
-
+    console.log(
+      `Phòng ${roomNumber} với ID ${room.id} và đã được cập nhật giá ${row["PRICE"]} và mô tả ${row["DESCRIPTIONS"]} thành công.`,
+    );
   }
   // update price
   async updateAndLogPrice(
@@ -1273,13 +3971,13 @@ class UpdateRoomSari {
     huydev,
     idSheetUrl,
     item,
-    formattedDate
+    formattedDate,
   ) {
-    const priceConvert = this.convertPrice(row["PRICE"]);
+    const priceConvert = this.normalizePriceValue(row["PRICE"], huydev);
     console.log(
       "Giá CŨ ĐÃ EDIT :",
       priceConvert + " Giá WEB SARI :",
-      room.price
+      room.price,
     );
 
     if (room.price !== priceConvert) {
@@ -1287,12 +3985,14 @@ class UpdateRoomSari {
 
       await this.appendToFile(
         "capnhatgia.txt",
-        `${huydev.link + idSheetUrl}|${item.code}|${row["ADDRESS"]
-        }|${room.id}|${roomNumber}|${room.price
-        }(CŨ)|${priceConvert}(MỚI)|${formattedDate}|${huydev.web}\n`
+        `${huydev.link + idSheetUrl}|${item.code}|${
+          row["ADDRESS"]
+        }|${room.id}|${roomNumber}|${
+          room.price
+        }(CŨ)|${priceConvert}(MỚI)|${formattedDate}|${huydev.web}\n`,
       );
       console.log(
-        `Phòng ${roomNumber} với ID ${room.id} và đã được cập nhật giá ${row["PRICE"]}.`
+        `Phòng ${roomNumber} với ID ${room.id} và đã được cập nhật giá ${row["PRICE"]}.`,
       );
     }
   }
@@ -1304,13 +4004,14 @@ class UpdateRoomSari {
     huydev,
     idSheetUrl,
     item,
-    formattedDate
+    formattedDate,
   ) {
     if (!room.image_link) {
       await this.appendToFile(
         "facebook.txt",
-        `${huydev.link + idSheetUrl}|${item.code}|${row["ADDRESS"]
-        }|${roomNumber}|CHƯA CÓ LINK FB|${formattedDate}|${huydev.web}\n`
+        `${huydev.link + idSheetUrl}|${item.code}|${
+          row["ADDRESS"]
+        }|${roomNumber}|CHƯA CÓ LINK FB|${formattedDate}|${huydev.web}\n`,
       );
       console.log(`Phòng ${roomNumber} với ID ${room.id} chưa có link FB.`);
     }
@@ -1323,41 +4024,82 @@ class UpdateRoomSari {
     huydev,
     idSheetUrl,
     item,
-    formattedDate
+    formattedDate,
   ) {
-    if (row["IMAGE_DRIVER"]) {
-      await this.updateRoom(room.id, { origin_link: row["IMAGE_DRIVER"] });
-      await this.downloadAllFilesFromFolder(row["IMAGE_DRIVER"], room, 'downloads');
+    const imageDriver = (row["IMAGE_DRIVER"] || "").toString().trim();
+    if (imageDriver) {
+      try {
+        await this.updateRoom(room.id, { origin_link: imageDriver });
+        const uploadResult = await this.downloadAllFilesFromFolder(
+          imageDriver,
+          room,
+          "downloads",
+        );
 
-      await this.appendToFile(
-        "capnhatdriver.txt",
-        `${huydev.link + idSheetUrl}|${item.code}|${row["ADDRESS"]
-        }|${roomNumber}|${row["IMAGE_DRIVER"]}(MỚI)|${formattedDate}|${huydev.web
-        }\n`
-      );
-      console.log(
-        `Phòng ${roomNumber} với ID ${room.id} và đã được cập nhật hình từ driver link ${row["IMAGE_DRIVER"]}.`
-      );
+        if (uploadResult?.status === "uploaded") {
+          await this.appendToFile(
+            "capnhatdriver.txt",
+            `${huydev.link + idSheetUrl}|${item.code}|${
+              row["ADDRESS"]
+            }|${roomNumber}|${imageDriver}(M???I)|${formattedDate}|${
+              huydev.web
+            }\n`,
+          );
+          console.log(
+            `Ph??ng ${roomNumber} v???i ID ${room.id} v?? ???? ???????c c???p nh???t h??nh t??? driver link ${imageDriver}.`,
+          );
+        } else if (uploadResult?.status === "already_uploaded") {
+          console.log(
+            `Ph??ng ${roomNumber} v???i ID ${room.id} ???? c?? s???n ${uploadResult.count} ???nh tr??n MinIO.`,
+          );
+        } else if (uploadResult?.status === "empty_folder") {
+          console.log(
+            `Không tìm thấy ảnh khả dụng từ link ${imageDriver} cho phòng ${roomNumber}.`,
+          );
+        } else if (
+          uploadResult?.status === "invalid_link" ||
+          uploadResult?.status === "unsupported_link"
+        ) {
+          throw new Error(
+            uploadResult?.message || "Link ảnh không hợp lệ hoặc chưa được hỗ trợ.",
+          );
+        }
+      } catch (error) {
+        await this.appendToFile(
+          "driver_error.txt",
+          `${huydev.link + idSheetUrl}|${item.code}|${row["ADDRESS"]}|${
+            room.id
+          }|${roomNumber}|${imageDriver}|${error?.message || error}|${
+            formattedDate
+          }|${huydev.web}\n`,
+        );
+        console.error(
+          `Lỗi cập nhật ảnh cho phòng ${roomNumber} với ID ${room.id}:`,
+          error?.message || error,
+        );
+      }
     } else {
       const formattedDate = this.getFormattedDate();
-      const entryContentIMAGE_DRIVERMismatch = `${huydev.link + idSheetUrl}|${row["BUILDING"]
-        }|${row["ADDRESS"]}|KHÔNG CÓ LINK DRIVER|${formattedDate}|${huydev.web}`;
+      const entryContentIMAGE_DRIVERMismatch = `${huydev.link + idSheetUrl}|${
+        row["BUILDING"]
+      }|${row["ADDRESS"]}|KHÔNG CÓ LINK DRIVER|${formattedDate}|${huydev.web}`;
 
       const driversMismatch = await this.checkIfEntryExists(
         "ggsheet.txt",
-        entryContentIMAGE_DRIVERMismatch
+        entryContentIMAGE_DRIVERMismatch,
       );
 
       if (!driversMismatch) {
         const formattedDate = this.getFormattedDate();
         await this.appendToFile(
           "ggsheet.txt",
-          `${huydev.link + idSheetUrl}|${row["BUILDING"]}|${row["ADDRESS"]
-          }|KHÔNG CÓ LINK DRIVER|${formattedDate}|${huydev.web}\n`
+          `${huydev.link + idSheetUrl}|${row["BUILDING"]}|${
+            row["ADDRESS"]
+          }|KHÔNG CÓ LINK DRIVER|${formattedDate}|${huydev.web}\n`,
         );
       } else {
         console.log(
-          `Đã lưu lỗi driver vào file không có driver ở google sheet.txt`
+          `Đã lưu lỗi driver vào file không có driver ở google sheet.txt`,
         );
       }
     }
@@ -1365,10 +4107,11 @@ class UpdateRoomSari {
 
   getFormattedDate() {
     const now = new Date();
-    return `${now.getDate()}/${now.getMonth() + 1
-      }/${now.getFullYear()}-${now.getHours()}:${String(
-        now.getMinutes()
-      ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    return `${now.getDate()}/${
+      now.getMonth() + 1
+    }/${now.getFullYear()}-${now.getHours()}:${String(
+      now.getMinutes(),
+    ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
   }
 
   async appendToFile(fileName, content) {
@@ -1377,19 +4120,20 @@ class UpdateRoomSari {
 
   incrementRunStats(huydev, item, type) {
     if (!this.runStats) this.runStats = {};
-    if (!this.runStats[item.code]) {
-      this.runStats[item.code] = {
+    const statsKey = `${item.code}|${huydev.type || "default"}`;
+    if (!this.runStats[statsKey]) {
+      this.runStats[statsKey] = {
         cdt: huydev.id,
         toa: item.code,
         trong: 0,
         taoMoi: 0,
-        bot: huydev.web
+        bot: this.getSheetExecutionKey(huydev),
       };
     }
     if (type === "trong") {
-      this.runStats[item.code].trong += 1;
+      this.runStats[statsKey].trong += 1;
     } else if (type === "taoMoi") {
-      this.runStats[item.code].taoMoi += 1;
+      this.runStats[statsKey].taoMoi += 1;
     }
   }
 
@@ -1409,34 +4153,37 @@ class UpdateRoomSari {
     }
     // Handle multiple delimiters: comma, semicolon, newline
     let data = room.split(/[,\n;]/);
-    let separators = ['\\(', 'sẵn', 'giá'];
-    let roomseparate = '+';
+    let separators = ["\\(", "sẵn", "giá"];
+    let roomseparate = "+";
     // Tạo biểu thức chính quy từ mảng các separators
-    const regex = new RegExp(separators.join('|'), 'gi');
-    const rooms = []
-    data.forEach(item => {
+    const regex = new RegExp(separators.join("|"), "gi");
+    const rooms = [];
+    data.forEach((item) => {
       let roomInfo = item.trim();
       if (!roomInfo) return;
 
       // Tách bỏ phần thông tin phụ sau dấu ( hoặc từ "giá" hoặc từ "sẵn"
       let roomPart = roomInfo.split(regex)[0].trim();
       if (!roomPart) return;
-      
+
       // Xử lý định dạng 701.1+2+3
-      let roomName = roomPart.split('.')[0];
-      if (roomPart.split('.').length > 1) {
-        roomPart.split('.')[1].split(roomseparate).forEach(suffix => {
-          rooms.push(`${roomName}.${suffix.trim()}`);
-        })
+      let roomName = roomPart.split(".")[0];
+      if (roomPart.split(".").length > 1) {
+        roomPart
+          .split(".")[1]
+          .split(roomseparate)
+          .forEach((suffix) => {
+            rooms.push(`${roomName}.${suffix.trim()}`);
+          });
       } else {
         rooms.push(roomName);
       }
-    })
-    return rooms
+    });
+    return rooms;
   }
 
   convertPrice(priceStr) {
-    if (typeof priceStr === 'number') {
+    if (typeof priceStr === "number") {
       return priceStr;
     }
     if (!priceStr) {
@@ -1464,19 +4211,22 @@ class UpdateRoomSari {
     // 1. Xử lý các trường hợp có đơn vị (tr, m, k, trieu, ...)
     // Pattern: [Số] [Đơn vị] [Số phụ]
     const unitPatterns = [
-      { regex: /(\d+(\.\d+)?)\s*(tr)(?!ieu|iệu)(\d*)/g, unit: 1000000 },
-      { regex: /(\d+(\.\d+)?)\s*(m|t(?!r)|trieu|triệu|củ)(\d*)/g, unit: 1000000 },
-      { regex: /(\d+(\.\d+)?)\s*k/g, unit: 1000 }
+      { regex: /(\d+(\.\d+)?)\s*(tr)(?!ieu|iệu)\s*(\d*)/g, unit: 1000000 },
+      {
+        regex: /(\d+(\.\d+)?)\s*(m|t(?!r)|trieu|triệu|củ)\s*(\d*)/g,
+        unit: 1000000,
+      },
+      { regex: /(\d+(\.\d+)?)\s*k/g, unit: 1000 },
     ];
 
-    unitPatterns.forEach(pattern => {
+    unitPatterns.forEach((pattern) => {
       let match;
       while ((match = pattern.regex.exec(priceStr)) !== null) {
         unitFound = true;
         total += parseFloat(match[1]) * pattern.unit;
         if (match[4] && match[4].length > 0) {
           // Xử lý phần số sau đơn vị (ví dụ 3tr450 -> 3.450.000)
-          total += parseInt(match[4].padEnd(6, '0'));
+          total += parseInt(match[4].padEnd(6, "0"));
         }
       }
     });
@@ -1500,79 +4250,516 @@ class UpdateRoomSari {
     return total;
   }
 
-  handlePriceRange(rangeStr) {
-    const [startStr] = rangeStr.split(/[-–]/).map((part) => part.trim());
-    return this.convertPrice(startStr);
+  getPricePlainNumberMultiplier(config = {}) {
+    const multiplier = Number(config?.price_plain_number_multiplier);
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+      return 1;
+    }
+    return multiplier;
   }
 
-  async replaceAbbreviations(text, type = "chdv") {
-    const result = [];
+  scalePlainPriceNumber(priceValue, config = {}) {
+    const multiplier = this.getPricePlainNumberMultiplier(config);
+    if (
+      multiplier > 1 &&
+      Number.isInteger(priceValue) &&
+      priceValue >= 1000 &&
+      priceValue < 100000
+    ) {
+      return priceValue * multiplier;
+    }
+    return priceValue;
+  }
 
-    if (type === "chdv") {
-      // XXX, pXXX, tX, tầng X, sàn X, phòng X, giường X, gác xép
-      const chdvPatterns = [
-        /\b[pP]?\d{3}[a-zA-Z]?\b/g,      // XXX, pXXX, pXXXA
-        /\b[tT]\d+[a-zA-Z]?\b/g,         // tX, tXA
-        /\bCH\d*[a-zA-Z]?\b/gi,          // CH, CHXXX, CHXXXA
-        /tầng\s*[a-zA-Z0-9]+/gi,         // tầng 6A
-        /sàn\s*[a-zA-Z0-9]+/gi,          // sàn XA
-        /phòng\s*[a-zA-Z0-9]+/gi,        // phòng 6A
-        /giường\s*\d+/gi,                // giường X
-        /gác\s*xép/gi                    // gác xép
-      ];
-
-      chdvPatterns.forEach(pattern => {
-        const matches = text.match(pattern);
-        if (matches) {
-          result.push(...matches);
-        }
-      });
+  extractVndPriceSegment(priceText = "") {
+    const normalizedPriceText = this.normalizeSheetCellText(priceText);
+    if (!normalizedPriceText) {
+      return "";
     }
 
-    // Xử lý dạng "P303.1.3.5" => ["303.1", "303.3", "303.5"]
+    const unitMatches = [
+      ...normalizedPriceText.matchAll(
+        /(\d+(?:[.,]\d+)?)\s*(?:trieu|triệu|tr|m|t(?!r)|cu|củ|k|vnđ|vnd|đ)(\d{0,6})\b/gi,
+      ),
+    ];
+    if (unitMatches.length > 0) {
+      return this.normalizeSheetCellText(
+        unitMatches[unitMatches.length - 1]?.[0] || "",
+      );
+    }
+
+    const dottedMatches = [
+      ...normalizedPriceText.matchAll(/\b\d{1,3}(?:\.\d{3})+\b/g),
+    ];
+    if (dottedMatches.length > 0) {
+      return this.normalizeSheetCellText(
+        dottedMatches[dottedMatches.length - 1]?.[0] || "",
+      );
+    }
+
+    const plainMatches = [...normalizedPriceText.matchAll(/\b\d{6,}\b/g)];
+    if (plainMatches.length > 0) {
+      return this.normalizeSheetCellText(
+        plainMatches[plainMatches.length - 1]?.[0] || "",
+      );
+    }
+
+    return "";
+  }
+
+  resolvePriceRawByCurrencyPreference(priceRaw, config = {}) {
+    const normalizedPriceRaw = this.normalizeSheetCellText(priceRaw);
+    if (!normalizedPriceRaw) {
+      return { priceRaw: "", isUsdOnly: false };
+    }
+
+    if (!config?.prefer_vnd_over_usd) {
+      return { priceRaw: normalizedPriceRaw, isUsdOnly: false };
+    }
+
+    const hasUsd = /(?:\$|\busd\b)/i.test(normalizedPriceRaw);
+    if (!hasUsd) {
+      return { priceRaw: normalizedPriceRaw, isUsdOnly: false };
+    }
+
+    const vndSegment = this.extractVndPriceSegment(normalizedPriceRaw);
+    if (vndSegment) {
+      return { priceRaw: vndSegment, isUsdOnly: false };
+    }
+
+    return { priceRaw: normalizedPriceRaw, isUsdOnly: true };
+  }
+
+  normalizePriceValue(priceStr, config = {}) {
+    if (typeof priceStr === "number") {
+      if (!Number.isFinite(priceStr) || priceStr <= 0) {
+        return 0;
+      }
+      if (Number.isInteger(priceStr)) {
+        const scaledIntegerPrice = this.scalePlainPriceNumber(priceStr, config);
+        if (scaledIntegerPrice !== priceStr) {
+          return scaledIntegerPrice;
+        }
+      }
+      if (priceStr >= 1000) {
+        return Math.round(priceStr);
+      }
+      return Math.round(priceStr * 1000000);
+    }
+    if (!priceStr) {
+      return 0;
+    }
+
+    let normalizedPrice = priceStr
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (normalizedPrice.includes("gia")) {
+      const parts = normalizedPrice.split("gia");
+      normalizedPrice = parts[parts.length - 1];
+    }
+
+    normalizedPrice = normalizedPrice
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/,/g, ".")
+      .replace(/vn\u0111|vnd|\u0111/g, "")
+      .replace(/\s*-\s*$/g, "")
+      .trim();
+
+    if (normalizedPrice.includes("-")) {
+      return this.handleNormalizedPriceRange(normalizedPrice, config);
+    }
+
+    const compactMillionMatch = normalizedPrice.match(
+      /(\d+(?:\.\d+)?)\s*(trieu|tr|m|t(?!r)|cu)\s*(\d{0,6})/i,
+    );
+    if (compactMillionMatch) {
+      const mainValue = parseFloat(compactMillionMatch[1]) * 1000000;
+      const suffixValue = this.convertCompactMillionDigits(
+        compactMillionMatch[3],
+      );
+      return Math.round(mainValue + suffixValue);
+    }
+
+    const thousandMatch = normalizedPrice.match(/(\d+(?:\.\d+)?)\s*k\b/i);
+    if (thousandMatch) {
+      return Math.round(parseFloat(thousandMatch[1]) * 1000);
+    }
+
+    const plainNumberWithDots = normalizedPrice.match(
+      /\b\d{1,3}(?:\.\d{3})+\b/,
+    );
+    if (plainNumberWithDots) {
+      const dottedValue = parseInt(
+        plainNumberWithDots[0].replace(/\./g, ""),
+        10,
+      );
+      return this.scalePlainPriceNumber(dottedValue, config);
+    }
+
+    const decimalMatch = normalizedPrice.match(/\b\d+(?:\.\d+)\b/);
+    if (decimalMatch) {
+      const decimalValue = parseFloat(decimalMatch[0]);
+      if (decimalValue >= 1000) {
+        return this.scalePlainPriceNumber(Math.round(decimalValue), config);
+      }
+      return Math.round(decimalValue * 1000000);
+    }
+
+    if (/^\d+$/.test(normalizedPrice)) {
+      return this.scalePlainPriceNumber(parseInt(normalizedPrice, 10), config);
+    }
+
+    const plainNumber = normalizedPrice.match(/\b\d{4,}\b/);
+    if (plainNumber) {
+      return this.scalePlainPriceNumber(parseInt(plainNumber[0], 10), config);
+    }
+
+    const allNumbers = normalizedPrice.match(/\d+/g);
+    if (allNumbers && allNumbers.length > 0) {
+      const fallbackValue = parseInt(allNumbers[allNumbers.length - 1], 10);
+      if (fallbackValue >= 1000) {
+        return this.scalePlainPriceNumber(fallbackValue, config);
+      }
+    }
+
+    return 0;
+  }
+
+  convertCompactMillionDigits(value = "") {
+    if (!value) {
+      return 0;
+    }
+    return parseInt(value.padEnd(6, "0").slice(0, 6), 10);
+  }
+
+  normalizeDuLichRoomName(value = "") {
+    return this.removeVietnameseTonesSync(value).replace(/[^a-z0-9]+/g, "");
+  }
+
+  canonicalizeDuLichRoomName(value = "") {
+    const normalizedValue = this.normalizeDuLichRoomName(value);
+    if (!normalizedValue) {
+      return "";
+    }
+
+    for (const [canonicalName, aliases] of Object.entries(roomNameAliases)) {
+      const candidates = [canonicalName, ...(aliases || [])]
+        .map((alias) => this.normalizeDuLichRoomName(alias))
+        .filter(Boolean);
+
+      if (
+        candidates.some(
+          (candidate) =>
+            normalizedValue === candidate ||
+            normalizedValue.includes(candidate) ||
+            candidate.includes(normalizedValue),
+        )
+      ) {
+        return this.normalizeDuLichRoomName(canonicalName);
+      }
+    }
+
+    return normalizedValue;
+  }
+
+  extractChdvRoomNames(text = "") {
+    const result = [];
+
+    const chdvPatterns = [
+      /\b[pP]?\d{3}[a-zA-Z]?\b/g,
+      /\b[tT]\d+[a-zA-Z]?\b/g,
+      /\bCH\d*[a-zA-Z]?\b/gi,
+      /tầng\s*[a-zA-Z0-9]+/gi,
+      /sàn\s*[a-zA-Z0-9]+/gi,
+      /phòng\s*[a-zA-Z0-9]+/gi,
+      /giường\s*\d+/gi,
+      /gác\s*xép/gi,
+    ];
+
+    chdvPatterns.forEach((pattern) => {
+      const matches = text.match(pattern);
+      if (matches) {
+        result.push(...matches);
+      }
+    });
+
     const pMatch = text.match(/P?(\d+)\.([\d.]+)/gi);
     if (pMatch) {
-      pMatch.forEach(p => {
+      pMatch.forEach((p) => {
         const [, base, rest] = p.match(/P?(\d+)\.([\d.]+)/i);
-        const subs = rest.split('.').map(sub => `${base}.${sub}`);
+        const subs = rest.split(".").map((sub) => `${base}.${sub}`);
         result.push(...subs);
       });
     }
 
-    // Xử lý Tầng x-y-z => Tầng x, Tầng y, ...
     const floorRegex = /tầng\s*(\d+([\s,|+-]*\d+)*)/gi;
     text = text.replace(floorRegex, (_, floors) => {
       const expanded = floors
         .split(/[\s,|+-]+/)
-        .map(f => f.trim())
-        .filter(f => f)
-        .map(f => `Tầng ${f}`);
+        .map((f) => f.trim())
+        .filter((f) => f)
+        .map((f) => `Tầng ${f}`);
       result.push(...expanded);
-      return '';
+      return "";
     });
 
-    // Xử lý các số phòng còn lại: 201, 301.2, v.v.
     const codeRegex = /(\d{3}(?:\.\d+)?)/g;
     const matchesRoom = text.match(codeRegex);
-    if (matchesRoom) result.push(...matchesRoom);
+    if (matchesRoom) {
+      result.push(...matchesRoom);
+    }
 
-    // if (result.length === 0) result.push(text)
-
-    // Loại bỏ trùng và các chuỗi bị bao chứa bởi chuỗi khác
-    const uniqueRaw = [...new Set(result.map(r => r.toString().toLowerCase()))];
+    const uniqueRaw = [
+      ...new Set(result.map((r) => r.toString().toLowerCase())),
+    ];
     const unique = uniqueRaw.filter((str, index, arr) => {
       return !arr.some((otherStr, otherIndex) => {
         return index !== otherIndex && otherStr.includes(str);
       });
     });
 
+    const strictRoomCodes = unique.filter((value) =>
+      /^\d{2,4}(?:\.\d+)?$/.test(value),
+    );
+    if (strictRoomCodes.length > 0) {
+      return strictRoomCodes;
+    }
+
     return unique;
+  }
+
+  extractDuLichRoomNames(text = "") {
+    const expandCombinedRoomCodes = (value = "") => {
+      const roomText = this.normalizeSheetCellText(value);
+      if (!roomText.includes("+")) {
+        return [roomText];
+      }
+
+      const parts = roomText
+        .split("+")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (parts.length <= 1) {
+        return [roomText];
+      }
+
+      const roomCodePattern =
+        /^(?:[a-z]+\.)?\d+(?:\.\d+)?[a-z]*$|^[a-z]+\d+(?:\.\d+)?[a-z]*$/i;
+      const suffixPattern = /^\d+[a-z]*$/i;
+      if (!roomCodePattern.test(parts[0])) {
+        return [roomText];
+      }
+
+      const prefixMatch = parts[0].match(/^(.*?)(\d+(?:\.\d+)?[a-z]*)$/i);
+      const shorthandPrefix = prefixMatch ? prefixMatch[1] : "";
+
+      const expandedParts = [parts[0]];
+      for (const part of parts.slice(1)) {
+        if (suffixPattern.test(part) && shorthandPrefix) {
+          expandedParts.push(`${shorthandPrefix}${part}`);
+          continue;
+        }
+
+        if (roomCodePattern.test(part)) {
+          expandedParts.push(part);
+          continue;
+        }
+
+        return [roomText];
+      }
+
+      return expandedParts;
+    };
+
+    const expandRangeRoomCodes = (value = "") => {
+      const roomText = this.normalizeSheetCellText(value);
+      if (!roomText) {
+        return [];
+      }
+
+      const normalizedText = this
+        .removeVietnameseTonesSync(roomText)
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const samePrefixRangeMatch = normalizedText.match(
+        /^([a-z]+)\s*(\d+[a-z]?)\s*[-\u2013\u2014]\s*(?:([a-z]+)\s*)?(\d+[a-z]?)$/i,
+      );
+      if (!samePrefixRangeMatch) {
+        return [roomText];
+      }
+
+      const [, startPrefix, startSuffix, endPrefix, endSuffix] =
+        samePrefixRangeMatch;
+      if (endPrefix && startPrefix !== endPrefix) {
+        return [roomText];
+      }
+
+      const normalizedPrefix = startPrefix.toUpperCase();
+      return [
+        `${normalizedPrefix}${startSuffix.toUpperCase()}`,
+        `${normalizedPrefix}${endSuffix.toUpperCase()}`,
+      ];
+    };
+
+    return [
+      ...new Set(
+        this.normalizeSheetCellText(text)
+          .split(/[,\n;|]+/)
+          .map((part) => part.trim())
+          .filter((part) => part)
+          .flatMap((part) => expandRangeRoomCodes(part))
+          .flatMap((part) => expandCombinedRoomCodes(part))
+          .filter((part) => this.extractChdvRoomNames(part).length === 0)
+          .map((part) => this.canonicalizeDuLichRoomName(part))
+          .filter(Boolean),
+      ),
+    ];
+  }
+
+  extractHybridRoomNames(text = "") {
+    return [
+      ...new Set([
+        ...this.extractChdvRoomNames(text),
+        ...this.extractDuLichRoomNames(text),
+      ]),
+    ];
+  }
+
+  roomNamesMatch(roomName = "", inputName = "", type = "chdv") {
+    if (type === "du_lich") {
+      return (
+        this.canonicalizeDuLichRoomName(roomName) ===
+        this.canonicalizeDuLichRoomName(inputName)
+      );
+    }
+
+    if (type === "hybrid") {
+      const normalizedRoomName = roomName.trim().toLowerCase();
+      const normalizedInputName = inputName.trim().toLowerCase();
+      if (normalizedRoomName === normalizedInputName) {
+        return true;
+      }
+
+      const roomCandidates = this.extractHybridRoomNames(roomName);
+      const inputCandidates = this.extractHybridRoomNames(inputName);
+      if (roomCandidates.length > 0 && inputCandidates.length > 0) {
+        return roomCandidates.some((candidate) =>
+          inputCandidates.includes(candidate),
+        );
+      }
+
+      return (
+        this.canonicalizeDuLichRoomName(roomName) ===
+        this.canonicalizeDuLichRoomName(inputName)
+      );
+    }
+
+    return roomName.trim().toLowerCase() === inputName.trim().toLowerCase();
+  }
+
+  getAllocatedRoomIds(roomAllocationPool, realNewId) {
+    const allocationKey = String(realNewId);
+    if (!roomAllocationPool.has(allocationKey)) {
+      roomAllocationPool.set(allocationKey, new Set());
+    }
+    return roomAllocationPool.get(allocationKey);
+  }
+
+  findMatchedRoom(
+    rooms = [],
+    roomNumber = "",
+    type = "chdv",
+    allocatedRoomIds = new Set(),
+    allowDuplicateRoomNames = false,
+  ) {
+    const matchingRooms = rooms.filter((room) =>
+      this.roomNamesMatch(room.name, roomNumber, type),
+    );
+    if (matchingRooms.length === 0) {
+      return null;
+    }
+
+    if (!allowDuplicateRoomNames) {
+      return matchingRooms[0];
+    }
+
+    return (
+      matchingRooms.find((room) => !allocatedRoomIds.has(room.id)) || null
+    );
+  }
+
+  handleNormalizedPriceRange(rangeStr, config = {}) {
+    const [startStr] = rangeStr
+      .split(/[-\u2013\u2014]/)
+      .map((part) => part.trim());
+    return this.normalizePriceValue(startStr, config);
+  }
+
+  handlePriceRange(rangeStr) {
+    const [startStr] = rangeStr.split(/[-–]/).map((part) => part.trim());
+    return this.convertPrice(startStr);
+  }
+
+  handlePriceRange(rangeStr) {
+    const [startStr] = rangeStr
+      .split(/[-\u2013\u2014]/)
+      .map((part) => part.trim());
+    return this.normalizePriceValue(startStr);
+  }
+
+  getSheetExecutionKey(huydev) {
+    const customExecutionKey = this.normalizeSheetCellText(
+      huydev?.execution_key,
+    );
+    if (customExecutionKey) {
+      return customExecutionKey;
+    }
+
+    const webKey = this.normalizeSheetCellText(huydev?.web) || "unknown_web";
+    const typeKey = this.normalizeSheetCellText(huydev?.type) || "default";
+    const gidList = Array.isArray(huydev?.list_address)
+      ? huydev.list_address
+          .map((gid) => this.normalizeSheetCellText(gid))
+          .filter(Boolean)
+      : [];
+
+    if (gidList.length === 1) {
+      return `${webKey}|${typeKey}|gid:${gidList[0]}`;
+    }
+
+    return `${webKey}|${typeKey}`;
+  }
+
+  async replaceAbbreviations(text, type = "chdv") {
+    if (type === "du_lich") {
+      return this.extractDuLichRoomNames(text);
+    }
+
+    if (type === "hybrid") {
+      const normalizedText = this.normalizeSheetCellText(text);
+      if (
+        normalizedText &&
+        !/^(?:phong\s*)?[a-z]?\d{2,5}(?:\.\d+(?:\+\d+)*)?[a-jl-z]?\b/i.test(
+          normalizedText,
+        ) &&
+        /[a-z]/i.test(this.normalizeComparableText(normalizedText))
+      ) {
+        return [normalizedText];
+      }
+      return this.extractHybridRoomNames(text);
+    }
+
+    return this.extractChdvRoomNames(text);
   }
 
   async searchRealnew(address) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1592,8 +4779,8 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_REALNEW_SEARCH + `?page=${this.PAGE}&size=${this.SIZE}`,
           searchData,
-          { headers: headers }
-        )
+          { headers: headers },
+        ),
       );
       const responseData = response.data;
       return responseData;
@@ -1603,11 +4790,10 @@ class UpdateRoomSari {
     }
   }
 
-
   async searchRealnewByInvestor(investor) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1627,8 +4813,8 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_REALNEW_SEARCH + `?page=${this.PAGE}&size=${this.SIZE}`,
           searchData,
-          { headers: headers }
-        )
+          { headers: headers },
+        ),
       );
       const responseData = response.data;
       return responseData;
@@ -1641,7 +4827,7 @@ class UpdateRoomSari {
   async searchRoom(id) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1656,8 +4842,8 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_ROOM_SEARCH + `?page=${this.PAGE}&size=${this.SIZE}`,
           searchData,
-          { headers: headers }
-        )
+          { headers: headers },
+        ),
       );
       const responseData = response.data;
       return responseData;
@@ -1670,7 +4856,7 @@ class UpdateRoomSari {
   async unlockRoom(id) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1681,8 +4867,8 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_UNLOCK_ROOM + `?id=${id}`,
           {},
-          { headers: headers }
-        )
+          { headers: headers },
+        ),
       );
       const responseData = response.data;
       console.log("Data unlock", responseData);
@@ -1693,10 +4879,10 @@ class UpdateRoomSari {
     }
   }
 
-  async callApi({ domain, path = '', method = 'GET', data = {} }) {
+  async callApi({ domain, path = "", method = "GET", data = {} }) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1712,22 +4898,22 @@ class UpdateRoomSari {
 
       return response;
     } catch (error) {
-      console.error('❌ Lỗi gọi API:', error.response?.data || error.message);
-      return error.response?.data || error.message
+      console.error("❌ Lỗi gọi API:", error.response?.data || error.message);
+      return error.response?.data || error.message;
     }
   }
 
   async updateRoomByRealnew(rooms) {
     try {
       const res = await this.callApi({
-        "domain": `https://api-legacy.sari.vn/v1`,
-        "path": `/rooms/lockRoomsToDates`,
-        "method": "POST",
-        "data": (rooms || []).map(room => ({
-          "roomId": room.id,
-          "endDate": "2099-12-30"
-        }))
-      })
+        domain: `https://api-legacy.sari.vn/v1`,
+        path: `/rooms/lockRoomsToDates`,
+        method: "POST",
+        data: (rooms || []).map((room) => ({
+          roomId: room.id,
+          endDate: "2099-12-30",
+        })),
+      });
       if (res.status !== 200) {
         console.log(`Cập nhật kín ${rooms.length} phòng thất bại`);
       } else {
@@ -1743,7 +4929,7 @@ class UpdateRoomSari {
   async updateRoom(id, data) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1753,7 +4939,7 @@ class UpdateRoomSari {
       const response = await this.retryRequest(() =>
         axios.patch(this.URL_API_UPDATE_ROOM + id, data, {
           headers: headers,
-        })
+        }),
       );
       const responseData = response.data;
       console.log(responseData);
@@ -1767,7 +4953,7 @@ class UpdateRoomSari {
   async createRealnew(data) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1775,36 +4961,12 @@ class UpdateRoomSari {
       };
 
       const response = await this.retryRequest(() =>
-        axios.post('https://api-legacy.sari.vn/v1/realnews', data, {
+        axios.post("https://api-legacy.sari.vn/v1/realnews", data, {
           headers: headers,
-        })
+        }),
       );
       const responseData = response?.data;
       console.log("Tạo thành công tòa mới::", response);
-      return responseData;
-    } catch (error) {
-      console.error("Error updateRoom:", error);
-      return null
-    }
-  }
-
-  async createRoom(data) {
-    try {
-      const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
-      ).toString("base64");
-      const headers = {
-        Authorization: `Basic ${encodedCredentials}`,
-        "User-Agent": "bot2nguon*",
-      };
-
-      const response = await this.retryRequest(() =>
-        axios.post('https://api-legacy.sari.vn/v1/rooms', data, {
-          headers: headers,
-        })
-      );
-      const responseData = response.data;
-      console.log("Tạo phòng mới thành công ::", responseData);
       return responseData;
     } catch (error) {
       console.error("Error updateRoom:", error);
@@ -1812,22 +4974,52 @@ class UpdateRoomSari {
     }
   }
 
+  async createRoom(data) {
+    try {
+      const encodedCredentials = Buffer.from(
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
+      ).toString("base64");
+      const headers = {
+        Authorization: `Basic ${encodedCredentials}`,
+        "User-Agent": "bot2nguon*",
+      };
+
+      const response = await this.retryRequest(() =>
+        axios.post("https://api-legacy.sari.vn/v1/rooms", data, {
+          headers: headers,
+        }),
+      );
+      const responseData = response.data;
+      console.log("Tạo phòng mới thành công ::", responseData);
+      return responseData;
+    } catch (error) {
+      const { status, code, detail } = this.getRequestErrorSummary(error);
+      console.error("Error createRoom:", status || code || "UNKNOWN", detail);
+      return {
+        __failed: true,
+        status,
+        code,
+        detail,
+      };
+    }
+  }
+
   stringToSlug(str) {
     return str
       .toLowerCase()
-      .replace(/đ/g, 'd')               // thay đ → d
+      .replace(/đ/g, "d") // thay đ → d
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")  // xóa dấu
-      .replace(/[^a-z0-9\s-]/g, "")     // xóa ký tự đặc biệt
-      .replace(/\s+/g, "-")             // thay khoảng trắng bằng dấu -
-      .replace(/-+/g, "-")              // gộp nhiều dấu -
-      .replace(/^-+|-+$/g, "");         // xóa - đầu và cuối
+      .replace(/[\u0300-\u036f]/g, "") // xóa dấu
+      .replace(/[^a-z0-9\s-]/g, "") // xóa ký tự đặc biệt
+      .replace(/\s+/g, "-") // thay khoảng trắng bằng dấu -
+      .replace(/-+/g, "-") // gộp nhiều dấu -
+      .replace(/^-+|-+$/g, ""); // xóa - đầu và cuối
   }
 
   async lockRoom(data) {
     try {
       const encodedCredentials = Buffer.from(
-        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`
+        `${this.AUTH_USERNAME}:${this.AUTH_PASSWORD}`,
       ).toString("base64");
       const headers = {
         Authorization: `Basic ${encodedCredentials}`,
@@ -1841,8 +5033,8 @@ class UpdateRoomSari {
           {},
           {
             headers: headers,
-          }
-        )
+          },
+        ),
       );
       const responseData = response.data;
       console.log(responseData);
@@ -1855,12 +5047,12 @@ class UpdateRoomSari {
 }
 
 function clearFile() {
-  fs.writeFile('exits.txt', '', (err) => {
+  fs.writeFile("exits.txt", "", (err) => {
     if (err) {
-      console.error('Error clearing file:', err);
+      console.error("Error clearing file:", err);
       return;
     }
-    console.log('Xóa file thành công.');
+    console.log("Xóa file thành công.");
   });
 }
 
@@ -1881,6 +5073,9 @@ const reg = new UpdateRoomSari();
 // });
 
 // cái này chạy trực tiếp thì phải tắt hẹn giờ ở trên đi từ 2485--> 2495
-reg.run();
+if (require.main === module) {
+  reg.run();
+}
+module.exports = { UpdateRoomSari };
 
 // ưng chạy cái nào thì mở 1 trong 2 rồi ra lệnh node.ndex.js -> sp cái này lần cuối nhé.
