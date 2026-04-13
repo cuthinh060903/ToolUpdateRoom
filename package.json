@@ -5,6 +5,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",
+    "audit:room": "node modules/room-audit/index.js",
+    "run:daily": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-daily.ps1",
+    "schedule:daily": "powershell -ExecutionPolicy Bypass -File .\\scripts\\register-daily-task.ps1",
+    "schedule:stop": "powershell -ExecutionPolicy Bypass -File .\\scripts\\stop-daily-task.ps1",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
   },

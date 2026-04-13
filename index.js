@@ -40,10 +40,15 @@ class UpdateRoomSari {
     this.URL_API_LOCK_ROOM =
       "https://api-legacy.sari.vn/v1/rooms/lockRoomToDate?";
     this.LIST_GGSHEET = LIST_GGSHEET;
-    this.START_ID = 8;
+    this.START_ID = Number(process.env.START_ID || 1);
+    if (!Number.isFinite(this.START_ID) || this.START_ID < 1) {
+      this.START_ID = 8;
+    }
     this.RUN_ONLY_IDS = (process.env.RUN_ONLY_IDS || "")
       .split(",")
-      .map((id) => Number(id.trim()))
+      .map((id) => id.trim())
+      .filter((id) => id !== "")
+      .map((id) => Number(id))
       .filter((id) => Number.isFinite(id));
     this.API_KEY_GGSHEET = "4f74e1628d70cc3b23f7ad9d1d0a50802d01d1ea";
     this.BUCKETNAME = "sari";
@@ -341,11 +346,7 @@ class UpdateRoomSari {
       }
     }
 
-    return text
-      .replace(/\|/g, "/")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 500);
+    return text.replace(/\|/g, "/").replace(/\s+/g, " ").trim().slice(0, 500);
   }
 
   getRequestErrorSummary(error) {
@@ -651,7 +652,10 @@ class UpdateRoomSari {
       let lastDownloadError = null;
       for (const driveSource of sourceOrder) {
         try {
-          fileBuffer = await this.downloadDriveFile(driveSource.client, file.id);
+          fileBuffer = await this.downloadDriveFile(
+            driveSource.client,
+            file.id,
+          );
           break;
         } catch (error) {
           lastDownloadError = error;
@@ -940,9 +944,8 @@ class UpdateRoomSari {
   }
 
   normalizeComparableText(value = "") {
-    return this.removeVietnameseTonesSync(
-      this.normalizeSheetCellText(value),
-    ).replace(/\s+/g, " ")
+    return this.removeVietnameseTonesSync(this.normalizeSheetCellText(value))
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -982,7 +985,8 @@ class UpdateRoomSari {
       return true;
     }
 
-    const numberTokens = rawText.match(/\d+/g) || normalized.match(/\d+/g) || [];
+    const numberTokens =
+      rawText.match(/\d+/g) || normalized.match(/\d+/g) || [];
     const hasExplicitRoomListDelimiter = /[,;|]/.test(rawText);
     const looksLikeRoomCodeList =
       hasExplicitRoomListDelimiter &&
@@ -1207,9 +1211,7 @@ class UpdateRoomSari {
 
     const roomTokenPattern =
       /^(?:phong\s*)?([a-z]?(?:\d{2,5}(?:\.\d+(?:\+\d+)*)?|\d\.\d+(?:\+\d+)*)[a-jl-z]?)\b/i;
-    const roomMatch = segmentText.match(
-      roomTokenPattern,
-    );
+    const roomMatch = segmentText.match(roomTokenPattern);
     if (!roomMatch) {
       return null;
     }
@@ -1220,9 +1222,7 @@ class UpdateRoomSari {
     }
 
     let remainder = segmentText.slice(roomMatch[0].length).trim();
-    remainder = remainder
-      .replace(/^[\s\-–—:|/.,]+/g, "")
-      .trim();
+    remainder = remainder.replace(/^[\s\-–—:|/.,]+/g, "").trim();
     const normalizedRemainder = remainder
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
@@ -1321,7 +1321,10 @@ class UpdateRoomSari {
       }
 
       if (roomMatches.length <= 1) {
-        const entry = this.extractRoomPriceFromSharedSegment(baseSegment, config);
+        const entry = this.extractRoomPriceFromSharedSegment(
+          baseSegment,
+          config,
+        );
         if (entry) {
           entries.push(entry);
         }
@@ -1375,7 +1378,8 @@ class UpdateRoomSari {
 
   extractRoomPriceEntries(roomRaw, priceRaw, roomCol, priceCol, config = {}) {
     const normalizedPriceRaw = this.normalizeSheetCellText(priceRaw);
-    const shouldTrySharedCellParse = roomCol === priceCol || !normalizedPriceRaw;
+    const shouldTrySharedCellParse =
+      roomCol === priceCol || !normalizedPriceRaw;
 
     if (!shouldTrySharedCellParse) {
       return [{ roomRaw, priceRaw }];
@@ -1389,7 +1393,10 @@ class UpdateRoomSari {
       return this.pickPreferredSharedRoomEntries(sharedEntries, config);
     }
 
-    const namedEntry = this.extractNamedRoomPriceFromSharedCell(roomRaw, config);
+    const namedEntry = this.extractNamedRoomPriceFromSharedCell(
+      roomRaw,
+      config,
+    );
     if (namedEntry) {
       return [namedEntry];
     }
@@ -1441,17 +1448,11 @@ class UpdateRoomSari {
     }
 
     let cleanedAddress = normalizedValue
-      .replace(
-        /(?:\+?84|0)[\d.\s-]{6,}\d/g,
-        (phoneLikeText) => {
-          const digits = (phoneLikeText.match(/\d/g) || []).length;
-          return digits >= 8 ? " " : phoneLikeText;
-        },
-      )
-      .replace(
-        /\b(?:có|co|không|khong|ko)\s*thang\s*máy\b/gi,
-        " ",
-      )
+      .replace(/(?:\+?84|0)[\d.\s-]{6,}\d/g, (phoneLikeText) => {
+        const digits = (phoneLikeText.match(/\d/g) || []).length;
+        return digits >= 8 ? " " : phoneLikeText;
+      })
+      .replace(/\b(?:có|co|không|khong|ko)\s*thang\s*máy\b/gi, " ")
       .replace(/\bthang\s*bộ\b/gi, " ");
 
     const trailingNoisePatterns = [
@@ -1701,11 +1702,9 @@ class UpdateRoomSari {
     const addressCore = normalizedAddress
       .replace(/^(?:so|nha(?:\s+so)?|so\s+nha)\s+/i, "")
       .trim();
-    const leadingPathMatch = normalizedAddress.match(
-      /^(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i,
-    ) || addressCore.match(
-      /^(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i,
-    );
+    const leadingPathMatch =
+      normalizedAddress.match(/^(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i) ||
+      addressCore.match(/^(\d+[a-z]?(?:[/.-]\d+[a-z]?)+)\b/i);
     if (!leadingPathMatch) {
       return [];
     }
@@ -1738,9 +1737,8 @@ class UpdateRoomSari {
     );
 
     if (routeTokens.size === 0) {
-      const leadingPathSegments = this.extractLeadingAddressPathSegments(
-        rawAddress,
-      );
+      const leadingPathSegments =
+        this.extractLeadingAddressPathSegments(rawAddress);
       if (leadingPathSegments.length > 1) {
         leadingPathSegments
           .slice(1)
@@ -1803,7 +1801,8 @@ class UpdateRoomSari {
       return null;
     }
 
-    const coreAddress = this.extractAddressCoreText(cleanedAddress) || cleanedAddress;
+    const coreAddress =
+      this.extractAddressCoreText(cleanedAddress) || cleanedAddress;
     const normalizedAddress = this.removeVietnameseTonesSync(cleanedAddress)
       .replace(/[():,\\-]+/g, " ")
       .replace(/\s+/g, " ")
@@ -1939,10 +1938,7 @@ class UpdateRoomSari {
     const match = normalized.match(/^(\d+[a-z]?(?:\/\d+[a-z]?)*)\b/i);
     if (match) {
       const normalizedMatch = this.normalizeAddressNumberSignature(match[1]);
-      if (
-        explicitHouseNumber &&
-        explicitHouseNumber !== normalizedMatch
-      ) {
+      if (explicitHouseNumber && explicitHouseNumber !== normalizedMatch) {
         return `${explicitHouseNumber}|${normalizedMatch}`;
       }
       return explicitHouseNumber || normalizedMatch;
@@ -1956,10 +1952,7 @@ class UpdateRoomSari {
     const fallbackSignature = this.normalizeAddressNumberSignature(
       fallbackMatches[fallbackMatches.length - 1],
     );
-    if (
-      explicitHouseNumber &&
-      explicitHouseNumber !== fallbackSignature
-    ) {
+    if (explicitHouseNumber && explicitHouseNumber !== fallbackSignature) {
       return `${explicitHouseNumber}|${fallbackSignature}`;
     }
 
@@ -2045,7 +2038,8 @@ class UpdateRoomSari {
   }
 
   getArticleAddressSimilarity(searchTerm, candidateAddress) {
-    const normalizedSearchAddress = this.normalizeArticleAddressText(searchTerm);
+    const normalizedSearchAddress =
+      this.normalizeArticleAddressText(searchTerm);
     const normalizedCandidateAddress =
       this.normalizeArticleAddressText(candidateAddress);
 
@@ -2178,7 +2172,9 @@ class UpdateRoomSari {
       return 0;
     }
 
-    const normalizedCandidateNumbers = [...new Set(candidateNumbers.filter(Boolean))];
+    const normalizedCandidateNumbers = [
+      ...new Set(candidateNumbers.filter(Boolean)),
+    ];
     if (normalizedCandidateNumbers.length === 0) {
       return 0;
     }
@@ -2347,7 +2343,8 @@ class UpdateRoomSari {
 
     const normalizedSearchAddress = searchProfile.normalizedAddress || "";
     const normalizedCandidateAddress = candidateProfile.normalizedAddress || "";
-    const normalizedSearchCoreAddress = searchProfile.coreNormalizedAddress || "";
+    const normalizedSearchCoreAddress =
+      searchProfile.coreNormalizedAddress || "";
     const normalizedCandidateCoreAddress =
       candidateProfile.coreNormalizedAddress || "";
     const exactTextScore =
@@ -2359,7 +2356,9 @@ class UpdateRoomSari {
       (normalizedSearchCoreAddress &&
         normalizedCandidateCoreAddress &&
         (normalizedSearchCoreAddress === normalizedCandidateCoreAddress ||
-          normalizedSearchCoreAddress.includes(normalizedCandidateCoreAddress) ||
+          normalizedSearchCoreAddress.includes(
+            normalizedCandidateCoreAddress,
+          ) ||
           normalizedCandidateCoreAddress.includes(normalizedSearchCoreAddress)))
         ? 1
         : 0;
@@ -2433,7 +2432,8 @@ class UpdateRoomSari {
       }
 
       for (const candidateVariant of candidateVariants) {
-        const candidateProfile = this.buildAddressMatchProfile(candidateVariant);
+        const candidateProfile =
+          this.buildAddressMatchProfile(candidateVariant);
         if (!candidateProfile) {
           continue;
         }
@@ -2450,9 +2450,7 @@ class UpdateRoomSari {
             (scoreResult.matchScore > bestMatch.matchScore ||
               (scoreResult.matchScore === bestMatch.matchScore &&
                 scoreResult.exactTextScore > bestMatch.exactTextScore)));
-        if (
-          shouldReplaceBestMatch
-        ) {
+        if (shouldReplaceBestMatch) {
           bestMatch = {
             ...scoreResult,
             item: candidateItem,
@@ -2480,7 +2478,8 @@ class UpdateRoomSari {
       );
     }
 
-    const normalizedSearchAddress = this.normalizeArticleAddressText(searchTerm);
+    const normalizedSearchAddress =
+      this.normalizeArticleAddressText(searchTerm);
     const normalizedCandidateAddress =
       this.normalizeArticleAddressText(candidateAddress);
 
@@ -2563,11 +2562,13 @@ class UpdateRoomSari {
     if (!processedSearchTerm) {
       return null;
     }
-    const normalizedSearchKey = this.normalizeComparableText(processedSearchTerm);
+    const normalizedSearchKey =
+      this.normalizeComparableText(processedSearchTerm);
     const configuredAliases = config?.address_aliases || {};
     const aliasSearchTerm =
       Object.entries(configuredAliases).find(
-        ([alias]) => this.normalizeComparableText(alias) === normalizedSearchKey,
+        ([alias]) =>
+          this.normalizeComparableText(alias) === normalizedSearchKey,
       )?.[1] || processedSearchTerm;
     const searchableList = this.filterRealnewsForMatching(list, config).map(
       (item) => ({
@@ -2582,11 +2583,13 @@ class UpdateRoomSari {
       config,
     );
     if (selectedResult?.item) {
-      const normalizedSearchTerm = this.normalizeComparableText(processedSearchTerm);
+      const normalizedSearchTerm =
+        this.normalizeComparableText(processedSearchTerm);
       const normalizedCandidateAddress = this.normalizeComparableText(
         selectedResult.candidateVariant || "",
       );
-      const keywordTokens = this.extractAddressKeywordTokens(processedSearchTerm);
+      const keywordTokens =
+        this.extractAddressKeywordTokens(processedSearchTerm);
       if (
         config?.require_address_detail_for_match &&
         normalizedSearchTerm &&
@@ -2932,9 +2935,8 @@ class UpdateRoomSari {
       let sheetData;
       const sheetUrl = this.buildSheetUrl(huydev.link, idSheetUrl);
       if (huydev.if == "caocap") {
-        const { spreadsheetId, gid } = await this.extractGoogleSheetInfo(
-          sheetUrl,
-        );
+        const { spreadsheetId, gid } =
+          await this.extractGoogleSheetInfo(sheetUrl);
         sheetData = await this.spreadsheets(spreadsheetId, gid);
       }
 
@@ -3205,7 +3207,9 @@ class UpdateRoomSari {
                 this.normalizeComparableText(usdOnlyDescriptionNote);
               if (
                 !normalizedDescription ||
-                !normalizedDescription.includes(normalizedUsdOnlyDescriptionNote)
+                !normalizedDescription.includes(
+                  normalizedUsdOnlyDescriptionNote,
+                )
               ) {
                 finalDescription = finalDescription
                   ? `${finalDescription}. ${usdOnlyDescriptionNote}`
@@ -3303,6 +3307,8 @@ class UpdateRoomSari {
         console.log(
           `[config] Chạy giới hạn cho ID: ${this.RUN_ONLY_IDS.join(", ")}`,
         );
+      } else {
+        console.log(`[config] Chạy từ ID: ${this.START_ID}`);
       }
       let investors = [];
       let flag = false;
@@ -3517,17 +3523,19 @@ class UpdateRoomSari {
                                         room?.image_link || row["IMAGE_DRIVER"],
                                       origin_link: row["IMAGE_DRIVER"] || "",
                                       is_deleted: false,
-                                      description: this.sanitizeTextForLegacyApi(
-                                        row["DESCRIPTIONS"] || "",
-                                      ),
+                                      description:
+                                        this.sanitizeTextForLegacyApi(
+                                          row["DESCRIPTIONS"] || "",
+                                        ),
                                     };
                                     const res = await this.createRoom(data);
                                     if (!res?.id) {
-                                      const createErrorSummary = this.formatErrorForLog(
-                                        [res?.status, res?.code, res?.detail]
-                                          .filter(Boolean)
-                                          .join(" | "),
-                                      );
+                                      const createErrorSummary =
+                                        this.formatErrorForLog(
+                                          [res?.status, res?.code, res?.detail]
+                                            .filter(Boolean)
+                                            .join(" | "),
+                                        );
                                       await this.appendToFile(
                                         "taophongloi.txt",
                                         `${huydev.link + idSheetUrl}|${item.code}|${
@@ -3536,9 +3544,7 @@ class UpdateRoomSari {
                                           createErrorSummary
                                             ? "CREATE_ROOM_FAILED"
                                             : "CREATE_ROOM_NULL"
-                                        }|${
-                                          formattedDate
-                                        }|${huydev.web}${
+                                        }|${formattedDate}|${huydev.web}${
                                           createErrorSummary
                                             ? `|${createErrorSummary}`
                                             : ""
@@ -3559,8 +3565,16 @@ class UpdateRoomSari {
                                     if (Array.isArray(searchRooms?.content)) {
                                       searchRooms.content.push(res);
                                     }
-                                    this.incrementRunStats(huydev, item, "taoMoi");
-                                    this.incrementRunStats(huydev, item, "trong");
+                                    this.incrementRunStats(
+                                      huydev,
+                                      item,
+                                      "taoMoi",
+                                    );
+                                    this.incrementRunStats(
+                                      huydev,
+                                      item,
+                                      "trong",
+                                    );
                                     await this.appendToFile(
                                       "phongmoi.txt",
                                       `${huydev.link + idSheetUrl}|${item.code}|${
@@ -4061,7 +4075,8 @@ class UpdateRoomSari {
           uploadResult?.status === "unsupported_link"
         ) {
           throw new Error(
-            uploadResult?.message || "Link ảnh không hợp lệ hoặc chưa được hỗ trợ.",
+            uploadResult?.message ||
+              "Link ảnh không hợp lệ hoặc chưa được hỗ trợ.",
           );
         }
       } catch (error) {
@@ -4580,8 +4595,7 @@ class UpdateRoomSari {
         return [];
       }
 
-      const normalizedText = this
-        .removeVietnameseTonesSync(roomText)
+      const normalizedText = this.removeVietnameseTonesSync(roomText)
         .replace(/\s+/g, " ")
         .trim();
 
@@ -4687,9 +4701,7 @@ class UpdateRoomSari {
       return matchingRooms[0];
     }
 
-    return (
-      matchingRooms.find((room) => !allocatedRoomIds.has(room.id)) || null
-    );
+    return matchingRooms.find((room) => !allocatedRoomIds.has(room.id)) || null;
   }
 
   handleNormalizedPriceRange(rangeStr, config = {}) {
