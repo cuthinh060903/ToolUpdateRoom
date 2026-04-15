@@ -959,6 +959,25 @@ class UpdateRoomSari {
       return true;
     }
 
+    if (
+      [
+        /^thong tin toa nha\b/i,
+        /^ho tro gia\b/i,
+        /\bthanh toan dai han\b/i,
+        /^thoi gian ap dung\b/i,
+        /^dia diem\b/i,
+        /^chuong trinh\b/i,
+        /^uu dai\b/i,
+        /^khuyen mai\b/i,
+        /^top chot phong\b/i,
+        /^so phong chot\b/i,
+        /^dia chi nha\b/i,
+        /^anh+video\b/i,
+      ].some((pattern) => pattern.test(normalized))
+    ) {
+      return true;
+    }
+
     return [
       /^trang\s*\d*$/i,
       /^kinh nho\b/i,
@@ -982,6 +1001,21 @@ class UpdateRoomSari {
     }
 
     if (/^trang\s*\d*$/i.test(normalized)) {
+      return true;
+    }
+
+    if (
+      [
+        /^thong tin toa nha\b/i,
+        /^ho tro gia\b/i,
+        /\bthanh toan dai han\b/i,
+        /^thoi gian ap dung\b/i,
+        /^dia diem\b/i,
+        /^chuong trinh\b/i,
+        /^uu dai\b/i,
+        /^khuyen mai\b/i,
+      ].some((pattern) => pattern.test(normalized))
+    ) {
       return true;
     }
 
@@ -1445,7 +1479,8 @@ class UpdateRoomSari {
 
     return normalized
       .replace(/(^|[\s,;])s{2,}(?:ố|o)\s*(\d)/gi, "$1số $2")
-      .replace(/(^|[\s,;])s(?:ố|o)\s*(\d)/gi, "$1số $2");
+      .replace(/(^|[\s,;])s(?:ố|o)\s*(\d)/gi, "$1số $2")
+      .replace(/(^|[\s,;])s\s*\/?\s*n\.?\s*(\d)/gi, "$1số $2");
   }
 
   cleanAddressForMatch(rawAddress) {
@@ -1459,9 +1494,9 @@ class UpdateRoomSari {
     }
 
     let cleanedAddress = normalizedValue
-      .replace(/(?:\+?84|0)[\d.\s-]{6,}\d/g, (phoneLikeText) => {
+      .replace(/\b(?:\+?84|0)[\d.\s-]{7,}\d\b/g, (phoneLikeText) => {
         const digits = (phoneLikeText.match(/\d/g) || []).length;
-        return digits >= 8 ? " " : phoneLikeText;
+        return digits >= 9 ? " " : phoneLikeText;
       })
       .replace(/\b(?:có|co|không|khong|ko)\s*thang\s*máy\b/gi, " ")
       .replace(/\bthang\s*bộ\b/gi, " ");
@@ -1481,6 +1516,12 @@ class UpdateRoomSari {
     if (cutIndex < cleanedAddress.length) {
       cleanedAddress = cleanedAddress.slice(0, cutIndex);
     }
+
+    // Strip trailing room-type suffixes accidentally appended in address cells.
+    cleanedAddress = cleanedAddress.replace(
+      /\s*(?:[,;|/-]\s*)?(?:\d+\s*n\s*\d*\s*k|studio|gac\s*xep|gac\s*sep|gx|ccmn|chdv)\s*$/i,
+      " ",
+    );
 
     return cleanedAddress
       .replace(/\s*\([^)]*\)\s*/g, " ")
@@ -1771,10 +1812,17 @@ class UpdateRoomSari {
     }
 
     const explicitHouseNumberMatch = normalizedAddress.match(
-      /\b(?:nha|so)\s+(\d+[a-z]*)\b/i,
+      /\b(?:nha|so|sn|so\s+nha|nha\s+so)\s+(\d+[a-z]*)\b/i,
     );
     if (explicitHouseNumberMatch) {
       return this.normalizeAddressNumberSignature(explicitHouseNumberMatch[1]);
+    }
+
+    const prefixedHouseNumberMatch = normalizedAddress.match(
+      /^(?:so|sn)\s*(\d+[a-z]*)\b/i,
+    );
+    if (prefixedHouseNumberMatch) {
+      return this.normalizeAddressNumberSignature(prefixedHouseNumberMatch[1]);
     }
 
     const leadingHouseNumberMatch = normalizedAddress.match(/^(\d+[a-z]*)\b/i);
@@ -1782,15 +1830,11 @@ class UpdateRoomSari {
       return this.normalizeAddressNumberSignature(leadingHouseNumberMatch[1]);
     }
 
-    if (/[./-]/.test(normalizedAddress)) {
-      const trailingNumberMatches = [
-        ...normalizedAddress.matchAll(/(?:[./-])(\d+[a-z]*)\b/gi),
-      ];
-      if (trailingNumberMatches.length > 0) {
-        return this.normalizeAddressNumberSignature(
-          trailingNumberMatches[trailingNumberMatches.length - 1][1],
-        );
-      }
+    const looseNumberMatches = [
+      ...normalizedAddress.matchAll(/\b(\d+[a-z]*)\b/gi),
+    ].map((match) => match[1]);
+    if (looseNumberMatches.length === 1) {
+      return this.normalizeAddressNumberSignature(looseNumberMatches[0]);
     }
 
     return "";
@@ -1913,7 +1957,7 @@ class UpdateRoomSari {
       .replace(/\s+/g, " ")
       .trim();
     const explicitHouseNumberMatch = normalizedSource.match(
-      /\b(?:nha|so)\s+(\d+[a-z]*)\b/i,
+      /\b(?:nha|so|sn|so\s+nha|nha\s+so)\s+(\d+[a-z]*)\b/i,
     );
     const explicitHouseNumber = explicitHouseNumberMatch
       ? this.normalizeAddressNumberSignature(explicitHouseNumberMatch[1])
