@@ -1437,12 +1437,23 @@ class UpdateRoomSari {
     );
   }
 
+  normalizeAddressTypoPrefixes(rawAddress = "") {
+    const normalized = this.normalizeSheetCellText(rawAddress);
+    if (!normalized) {
+      return "";
+    }
+
+    return normalized
+      .replace(/(^|[\s,;])s{2,}(?:ố|o)\s*(\d)/gi, "$1số $2")
+      .replace(/(^|[\s,;])s(?:ố|o)\s*(\d)/gi, "$1số $2");
+  }
+
   cleanAddressForMatch(rawAddress) {
     if (!rawAddress) {
       return "";
     }
 
-    const normalizedValue = this.normalizeSheetCellText(rawAddress);
+    const normalizedValue = this.normalizeAddressTypoPrefixes(rawAddress);
     if (!normalizedValue) {
       return "";
     }
