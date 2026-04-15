@@ -1242,9 +1242,9 @@
     id: 26,
     type: "chdv",
     address_column: [1],
-    room_column: [6],
+    room_column: [7],
     building_code_column: [null],
-    price_column: [7],
+    price_column: [8],
     name: " 26 time",
     if: "caocap",
     web: " 26 time",
@@ -1255,11 +1255,11 @@
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
     exit: [], // từ muốn lọc trống kín
-    exitColumn: 9, // cột để loại trừ trống kín
-    exitLinkDriver: 3, // trường này là trường link driver để tải ảnh về
-    column: [1, 6, null, 7], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+    exitColumn: 10, // cột để loại trừ trống kín
+    exitLinkDriver: 4, // trường này là trường link driver để tải ảnh về
+    column: [1, 7, null, 8], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 8, 10, 11], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota: [2, 3, 5, 6, 9, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 0, // dòng của tiêu đề nằm ngang
     // columnVertical: 0, // stt cột lấy màu bị hàng dọc
     // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang

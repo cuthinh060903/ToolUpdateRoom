@@ -5,7 +5,13 @@ function looksLikePriceText(value = "") {
 }
 
 function isRoomLikeText(value = "") {
-  return /(?:phong\s*)?[a-z]?\d{2,5}(?:\.\d+)?[a-z]?/i.test(value);
+  return /^(?:phong\s*)?[a-z]?\d{2,5}(?:\.\d+)?[a-z]?$/i.test(
+    value.toString().trim(),
+  );
+}
+
+function isPlainNumberString(value = "") {
+  return /^[\d\s.,]+$/.test(value.toString().trim());
 }
 
 function isValidUrl(value = "") {
@@ -87,7 +93,13 @@ function applyRule2MappingError(record) {
     reasons.push("PRICE_UNPARSEABLE");
   }
 
-  if (priceRaw && isRoomLikeText(priceRaw)) {
+  if (
+    nextRecord.price === null &&
+    typeof nextRecord.price_raw === "string" &&
+    priceRaw &&
+    !isPlainNumberString(priceRaw) &&
+    isRoomLikeText(priceRaw)
+  ) {
     reasons.push("PRICE_LOOKS_LIKE_ROOM_NAME");
   }
 

@@ -871,11 +871,33 @@ class UpdateRoomSari {
       return "";
     }
 
-    return value
+    const sanitized = value
       .toString()
       .replace(/[\u{10000}-\u{10FFFF}]/gu, "")
       .replace(/[\u200D\uFE0E\uFE0F]/g, "")
       .replace(/[ \t]+\n/g, "\n")
+      .trim();
+
+    return this.removeContactPhoneTokens(sanitized);
+  }
+
+  removeContactPhoneTokens(value = "") {
+    if (!value) {
+      return "";
+    }
+
+    return value
+      .toString()
+      .replace(/(?:\+?84|0)(?:[\s().-]*\d){8,12}(?!\d)/g, " ")
+      .replace(
+        /\b(?:sđt|sdt|zalo|lien\s*he|liên\s*hệ|call|tel|phone)\b\s*[:\-]*/gi,
+        " ",
+      )
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/\s+([,.;:])/g, "$1")
+      .replace(/^[,;:|.\-\s]+/g, "")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -1014,6 +1036,10 @@ class UpdateRoomSari {
         /^chuong trinh\b/i,
         /^uu dai\b/i,
         /^khuyen mai\b/i,
+        /^top chot phong\b/i,
+        /^so phong chot\b/i,
+        /^dia chi nha\b/i,
+        /^anh+video\b/i,
       ].some((pattern) => pattern.test(normalized))
     ) {
       return true;
@@ -1461,11 +1487,17 @@ class UpdateRoomSari {
   }
 
   extractHyperlinkFromCell(cell) {
+    const chipLink =
+      cell?.chipRuns
+        ?.map((run) => run?.chip?.richLinkProperties?.uri)
+        .find(Boolean) || null;
+
     return (
       cell?.hyperlink ||
       cell?.userEnteredFormat?.textFormat?.link?.uri ||
       cell?.textFormatRuns?.find((run) => run.format?.link)?.format?.link
         ?.uri ||
+      chipLink ||
       this.extractHyperlinkFromFormula(cell?.userEnteredValue?.formulaValue) ||
       null
     );
@@ -2674,8 +2706,53 @@ class UpdateRoomSari {
   }
 
   extractDocumentId(url) {
-    const match = url.match(/\/document\/d\/([a-zA-Z0-9-_]+)/);
-    return match ? match[1] : null;
+    return this.extractGoogleDriveFileId(url);
+  }
+
+  extractGoogleDriveFileId(url) {
+    if (!url) {
+      return null;
+    }
+
+    const normalizedUrl = this.normalizeExternalUrl(url);
+    if (!normalizedUrl) {
+      return null;
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(normalizedUrl);
+    } catch (error) {
+      return null;
+    }
+
+    const host = (parsedUrl.hostname || "").toLowerCase();
+    if (!host.includes("google.com")) {
+      return null;
+    }
+
+    const path = parsedUrl.pathname || "";
+    const documentMatch = path.match(/\/document\/d\/([a-zA-Z0-9_-]+)/i);
+    if (documentMatch) {
+      return documentMatch[1];
+    }
+
+    const driveFileMatch = path.match(/\/file\/d\/([a-zA-Z0-9_-]+)/i);
+    if (driveFileMatch) {
+      return driveFileMatch[1];
+    }
+
+    const genericDMatch = path.match(/\/d\/([a-zA-Z0-9_-]+)/i);
+    if (genericDMatch) {
+      return genericDMatch[1];
+    }
+
+    const queryId = parsedUrl.searchParams.get("id");
+    if (queryId) {
+      return queryId;
+    }
+
+    return null;
   }
 
   async extractGoogleSheetInfo(url) {
@@ -2810,6 +2887,7 @@ class UpdateRoomSari {
               bgColor: backgroundColorHex,
               textColor: textColorHex,
               hyperlink: hyperlink,
+              note: cell?.note || "",
             };
           });
           return obj;
@@ -2901,12 +2979,10 @@ class UpdateRoomSari {
 
   async readGoogleDocByLink(docUrl) {
     if (docUrl == null || docUrl == undefined) return "";
-    if (!docUrl.startsWith("https://docs.google.com/document/d/")) {
-      return "";
-    }
-    const documentId = this.extractDocumentId(docUrl);
 
-    if (!documentId) {
+    const normalizedUrl = this.normalizeExternalUrl(docUrl);
+    const extractedFileId = this.extractGoogleDriveFileId(normalizedUrl);
+    if (!extractedFileId) {
       return "";
     }
 
@@ -2921,15 +2997,27 @@ class UpdateRoomSari {
 
     try {
       const drive = google.drive({ version: "v3", auth });
-      const metadata = await drive.files.get({
-        fileId: documentId,
-        fields: "mimeType, name",
+      let fileId = extractedFileId;
+      let metadata = await drive.files.get({
+        fileId,
+        fields: "mimeType, name, shortcutDetails(targetId,targetMimeType)",
       });
+
+      if (
+        metadata?.data?.mimeType === "application/vnd.google-apps.shortcut" &&
+        metadata?.data?.shortcutDetails?.targetId
+      ) {
+        fileId = metadata.data.shortcutDetails.targetId;
+        metadata = await drive.files.get({
+          fileId,
+          fields: "mimeType, name",
+        });
+      }
 
       let text = "";
       if (metadata.data.mimeType === "application/vnd.google-apps.document") {
         const docs = google.docs({ version: "v1", auth });
-        const res = await docs.documents.get({ documentId });
+        const res = await docs.documents.get({ documentId: fileId });
         const content = res.data.body.content;
         for (const element of content) {
           if (element.paragraph) {
@@ -2947,7 +3035,7 @@ class UpdateRoomSari {
       ) {
         // Tải file .docx / .doc về dưới dạng buffer và đọc bằng mammoth
         const res = await drive.files.get(
-          { fileId: documentId, alt: "media" },
+          { fileId: fileId, alt: "media" },
           { responseType: "arraybuffer" },
         );
         const result = await mammoth.extractRawText({
@@ -2956,7 +3044,7 @@ class UpdateRoomSari {
         text = result.value;
       } else {
         console.warn(
-          `⚠️ Bỏ qua: File "${metadata.data.name}" (${documentId}) là định dạng ${metadata.data.mimeType}, không hỗ trợ đọc nội dung.`,
+          `⚠️ Bỏ qua: File "${metadata.data.name}" (${fileId}) là định dạng ${metadata.data.mimeType}, không hỗ trợ đọc nội dung.`,
         );
         return "";
       }
@@ -3165,22 +3253,28 @@ class UpdateRoomSari {
           for (const item of huydev.mota) {
             let cellValue = "";
             let hyperlink = "";
+            let cellNote = "";
 
             if (typeof item === "string") {
               cellValue = this.getRangeFromSheetData(results, item);
             } else {
               cellValue = row[`field${item}`]?.value;
               hyperlink = row[`field${item}`]?.hyperlink;
+              cellNote = row[`field${item}`]?.note;
             }
 
-            // Prioritize Google Doc content
-            if (
-              hyperlink &&
-              hyperlink.includes("docs.google.com/document/d/")
-            ) {
+            // Prioritize Google Doc/Drive textual content when a cell has link
+            let appendedDocContent = false;
+            if (hyperlink) {
               const content = await this.readGoogleDocByLink(hyperlink);
-              if (content) docContents.push(content);
-            } else if (
+              if (content) {
+                docContents.push(content);
+                appendedDocContent = true;
+              }
+            }
+
+            if (
+              !appendedDocContent &&
               cellValue &&
               cellValue.toString().includes("docs.google.com/document/d/")
             ) {
@@ -3191,9 +3285,19 @@ class UpdateRoomSari {
                 );
               if (urlMatch) {
                 const content = await this.readGoogleDocByLink(urlMatch[0]);
-                if (content) docContents.push(content);
+                if (content) {
+                  docContents.push(content);
+                  appendedDocContent = true;
+                }
               }
-            } else if (cellValue) {
+            }
+
+            if (!appendedDocContent && cellNote) {
+              textContents.push(cellNote);
+              appendedDocContent = true;
+            }
+
+            if (!appendedDocContent && cellValue) {
               const headerVal =
                 typeof item === "number"
                   ? header[`field${item}`]?.value || ""
