@@ -73,6 +73,33 @@ Hoặc:
 powershell -ExecutionPolicy Bypass -File .\scripts\stop-daily-task.ps1 -TaskName "ToolUpdateRoom-TwiceDaily"
 ```
 
+## Nếu muốn ngưng hẳn lịch tự động về sau
+
+Nếu không muốn tool tự chạy nữa theo giờ đã cài, có 2 cách:
+
+### Cách 1: Tắt lịch nhưng vẫn giữ task
+
+```powershell
+schtasks /Change /TN "ToolUpdateRoom-TwiceDaily" /Disable
+```
+
+Khi muốn bật lại:
+
+```powershell
+schtasks /Change /TN "ToolUpdateRoom-TwiceDaily" /Enable
+```
+
+### Cách 2: Xóa hẳn task khỏi máy
+
+```powershell
+schtasks /Delete /TN "ToolUpdateRoom-TwiceDaily" /F
+```
+
+Ý nghĩa:
+
+- `Disable`: chỉ tắt lịch, sau này có thể bật lại
+- `Delete`: xóa hẳn task, muốn dùng lại thì phải đăng ký lại từ đầu
+
 ## Nếu có tiến trình Node còn chạy
 
 Có lúc task đã dừng nhưng tiến trình `node` vẫn còn chạy.
