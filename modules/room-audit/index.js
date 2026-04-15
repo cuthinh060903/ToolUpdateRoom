@@ -190,7 +190,9 @@ function buildRunOptions(argv = [], env = process.env) {
   const onlyIds = (args.ids || env.ROOM_AUDIT_ONLY_IDS || "")
     .toString()
     .split(",")
-    .map((value) => Number(value.trim()))
+    .map((value) => value.trim())
+    .filter((value) => value !== "")
+    .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
 
   return {
