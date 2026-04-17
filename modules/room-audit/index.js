@@ -15,6 +15,10 @@ const LOG_FILES = [
   "khongcodulieu.txt",
 ];
 const MAX_ROOM_PROBE_CANDIDATES = 3;
+// Change this path (or set ROOM_AUDIT_OPENCLAW_WORKSPACE_DIR) when running on another machine.
+const OPENCLAW_WORKSPACE_DIR =
+  process.env.ROOM_AUDIT_OPENCLAW_WORKSPACE_DIR ||
+  "C:/Users/thinh/.openclaw/workspace";
 
 function toBoolean(value, defaultValue = false) {
   if (value === undefined || value === null || value === "") {
@@ -87,6 +91,50 @@ async function writeReportFiles({
   }
 
   await Promise.all(writeTasks);
+}
+
+async function copyLatestSummaryToOpenClaw(
+  summaryPath,
+  workspaceDir = OPENCLAW_WORKSPACE_DIR,
+) {
+  const safeWorkspaceDir = workspaceDir?.toString().trim();
+
+  if (!safeWorkspaceDir) {
+    const error = "OpenClaw workspace dir is empty.";
+    console.warn(
+      `[room-audit][warning] Failed to copy latest summary to OpenClaw workspace: ${error}`,
+    );
+    return {
+      copied: false,
+      workspaceDir: safeWorkspaceDir || "",
+      targetPath: "",
+      error,
+    };
+  }
+
+  const targetPath = path.join(safeWorkspaceDir, path.basename(summaryPath));
+
+  try {
+    await ensureDirectory(safeWorkspaceDir);
+    await fs.copyFile(summaryPath, targetPath);
+    return {
+      copied: true,
+      workspaceDir: safeWorkspaceDir,
+      targetPath,
+      error: null,
+    };
+  } catch (error) {
+    const message = error?.message || String(error);
+    console.warn(
+      `[room-audit][warning] Failed to copy latest summary to OpenClaw workspace (${targetPath}): ${message}`,
+    );
+    return {
+      copied: false,
+      workspaceDir: safeWorkspaceDir,
+      targetPath,
+      error: message,
+    };
+  }
 }
 
 async function readLogLines(rootDir, fileName) {
@@ -537,6 +585,10 @@ function buildRunOptions(argv = [], env = process.env) {
       args.debug ?? env.ROOM_AUDIT_DEBUG ?? env.npm_config_debug,
       false,
     ),
+    openClawWorkspaceDir:
+      args["openclaw-workspace-dir"] ??
+      env.ROOM_AUDIT_OPENCLAW_WORKSPACE_DIR ??
+      OPENCLAW_WORKSPACE_DIR,
   };
 }
 
@@ -700,6 +752,10 @@ async function runAuditFlow(options = {}) {
     txtPath: latestTxtPath,
     summaryPath: latestSummaryPath,
   });
+  const openClawSummaryCopy = await copyLatestSummaryToOpenClaw(
+    latestSummaryPath,
+    options.openClawWorkspaceDir,
+  );
 
   const telegramResult = await sendAuditTelegram(report, {
     enabled: options.sendTelegram,
@@ -714,6 +770,10 @@ async function runAuditFlow(options = {}) {
       latestJsonPath,
       latestTxtPath,
       latestSummaryPath,
+      openClawWorkspaceDir: openClawSummaryCopy.workspaceDir,
+      openClawSummaryPath: openClawSummaryCopy.targetPath,
+      openClawSummaryCopied: openClawSummaryCopy.copied,
+      openClawSummaryCopyError: openClawSummaryCopy.error,
     },
     telegramResult,
   };
@@ -728,6 +788,13 @@ if (require.main === module) {
       console.log(`[room-audit] Latest JSON report: ${output.latestJsonPath}`);
       console.log(`[room-audit] Latest text report: ${output.latestTxtPath}`);
       console.log(`[room-audit] Latest summary report: ${output.latestSummaryPath}`);
+      console.log(
+        `[room-audit] OpenClaw summary copy: ${
+          output.openClawSummaryCopied
+            ? output.openClawSummaryPath
+            : `warning (${output.openClawSummaryCopyError || "unknown error"})`
+        }`,
+      );
       console.log(`[room-audit] Total rows: ${report.total_rows}`);
       console.log(
         `[room-audit] Telegram: ${telegramResult.sent ? "sent" : telegramResult.reason}`,
