@@ -567,6 +567,175 @@ function formatReasonList(reasonList = []) {
     .join(", ");
 }
 
+const BUSINESS_SUGGESTED_ACTIONS = [
+  {
+    key: "ADDRESS_BUILDING",
+    label: "Lech dia chi / Khong tim thay toa nha / Khong match duoc toa nha",
+    summaryText:
+      "Ra soat dia chi nguon trong sheet, doi chieu building tren web, kiem tra so nha / ngo / ngach / alias",
+    cdtText: "Ra soat dia chi/building/alias",
+  },
+  {
+    key: "ROOM_STATUS_UPDATE",
+    label: "Phong chua cap nhat duoc trang thai trong",
+    summaryText:
+      "Sau khi match dung building, kiem tra tiep mapping ten phong va flow cap nhat status",
+    cdtText: "Kiem tra mapping ten phong + flow status",
+  },
+  {
+    key: "NO_IMAGE_CONFIRMED",
+    label: "Phong khong co anh",
+    summaryText: "Kiem tra link anh nguon, IMAGE_DRIVER va ket qua upload",
+    cdtText: "Kiem tra link anh + IMAGE_DRIVER + upload",
+  },
+  {
+    key: "IMAGE_CHECK_UNKNOWN",
+    label: "Phong chua kiem tra duoc anh",
+    summaryText:
+      "Kiem tra quyen truy cap link anh, nguon anh va ket noi MinIO",
+    cdtText: "Kiem tra quyen link anh + MinIO",
+  },
+  {
+    key: "UPDATED_AT_DATA",
+    label: "Thieu thong tin cap nhat",
+    summaryText: "Kiem tra du lieu updated_at tu API/log",
+    cdtText: "Kiem tra updated_at tu API/log",
+  },
+];
+
+const ADDRESS_BUILDING_REASONS = new Set([
+  "ADDRESS_MISMATCH_LOGGED",
+  "BUILDING_NOT_FOUND",
+  "BUILDING_NOT_MATCHED",
+  "BUILDING_MISSING_ON_WEB_LOGGED",
+]);
+
+const ROOM_STATUS_REASONS = new Set([
+  "SHEET_ROOM_NOT_UPDATED_TO_EMPTY",
+  "ROOM_NOT_FOUND",
+  "ROOM_NOT_MATCHED_POSSIBLE_WRONG_COLUMN",
+  "ROOM_STATUS_MISSING",
+  "ROOM_STATUS_HET",
+  "ROOM_STILL_HAS_EMPTY_ROOM_DATE",
+  "CAPNHATTRONG_LOG_MISSING",
+  "CREATE_ROOM_FAILED_LOGGED",
+  "SEARCH_ROOM_API_ERROR",
+]);
+
+const IMAGE_CHECK_UNKNOWN_REASONS = new Set([
+  "IMAGE_COUNT_NOT_CHECKED",
+  "IMAGE_COUNT_UNAVAILABLE",
+  "IMAGE_SOURCE_MISSING",
+  "IMAGE_DRIVER_MISSING",
+  "DRIVER_ERROR_LOGGED",
+  "IMAGE_LINK_INVALID",
+  "IMAGE_LINK_UNSUPPORTED",
+  "IMAGE_SOURCE_EMPTY_FOLDER",
+  "IMAGE_LINK_401",
+  "IMAGE_LINK_403",
+  "IMAGE_LINK_404",
+]);
+
+function matchesAddressBuildingReason(reason = "") {
+  return ADDRESS_BUILDING_REASONS.has(reason);
+}
+
+function matchesRoomStatusReason(reason = "") {
+  return ROOM_STATUS_REASONS.has(reason);
+}
+
+function matchesImageCheckUnknownReason(reason = "") {
+  return IMAGE_CHECK_UNKNOWN_REASONS.has(reason);
+}
+
+function matchesUpdatedAtReason(reason = "") {
+  return (
+    reason === "UPDATED_AT_MISSING" ||
+    reason === "UPDATED_AT_INVALID" ||
+    /^STALE_GT_\d+H$/.test(reason)
+  );
+}
+
+function collectSuggestedActionKeys({
+  reasonEntries = [],
+  roomsWithoutImages = 0,
+  roomsWithoutImagesUnknown = 0,
+  includeUpdatedAt = true,
+} = {}) {
+  const reasons = Array.isArray(reasonEntries)
+    ? reasonEntries.map((item) => item?.reason || item?.step || item).filter(Boolean)
+    : [];
+  const reasonSet = new Set(reasons);
+  const actionKeys = [];
+
+  if ([...reasonSet].some((reason) => matchesAddressBuildingReason(reason))) {
+    actionKeys.push("ADDRESS_BUILDING");
+  }
+
+  if ([...reasonSet].some((reason) => matchesRoomStatusReason(reason))) {
+    actionKeys.push("ROOM_STATUS_UPDATE");
+  }
+
+  if (roomsWithoutImages > 0 || reasonSet.has("IMAGE_COUNT_ZERO")) {
+    actionKeys.push("NO_IMAGE_CONFIRMED");
+  }
+
+  if (
+    roomsWithoutImagesUnknown > 0 ||
+    [...reasonSet].some((reason) => matchesImageCheckUnknownReason(reason))
+  ) {
+    actionKeys.push("IMAGE_CHECK_UNKNOWN");
+  }
+
+  if (
+    includeUpdatedAt &&
+    [...reasonSet].some((reason) => matchesUpdatedAtReason(reason))
+  ) {
+    actionKeys.push("UPDATED_AT_DATA");
+  }
+
+  return BUSINESS_SUGGESTED_ACTIONS.filter((item) => actionKeys.includes(item.key));
+}
+
+function buildSuggestedActionLines(report) {
+  const suggestions = collectSuggestedActionKeys({
+    reasonEntries: report.reason_summary,
+    roomsWithoutImages: report.total_rooms_without_images,
+    roomsWithoutImagesUnknown: report.total_rooms_without_images_unknown,
+    includeUpdatedAt: true,
+  });
+
+  const lines = ["Huong xu ly de xuat:"];
+  if (suggestions.length === 0) {
+    lines.push("- Khong co huong xu ly de xuat vi khong ghi nhan loi business noi bat.");
+    return lines;
+  }
+
+  suggestions.forEach((item) => {
+    lines.push(`- ${item.label}: ${item.summaryText}.`);
+  });
+
+  return lines;
+}
+
+function buildCdtSuggestedActionText(group) {
+  const suggestions = collectSuggestedActionKeys({
+    reasonEntries: group.top_update_error_reasons,
+    roomsWithoutImages: group.rooms_without_images,
+    roomsWithoutImagesUnknown: group.rooms_without_images_unknown,
+    includeUpdatedAt: false,
+  });
+
+  if (suggestions.length === 0) {
+    return "";
+  }
+
+  return suggestions
+    .slice(0, 3)
+    .map((item) => item.cdtText)
+    .join("; ");
+}
+
 function buildBusinessSummaryLines(report, options = {}) {
   const cdtLimit = Number.isFinite(options?.businessCdtLimit)
     ? options.businessCdtLimit
@@ -626,11 +795,15 @@ function buildBusinessSummaryLines(report, options = {}) {
   }
 
   lines.push("");
+  lines.push(...buildSuggestedActionLines(report));
+
+  lines.push("");
   lines.push("CDT can chu y:");
   if (attentionGroups.length > 0) {
     attentionGroups.forEach((group) => {
+      const cdtSuggestedActionText = buildCdtSuggestedActionText(group);
       lines.push(
-        `- CDT ${group.cdt_id} (${group.cdt_name}): ${formatCdtStatusLabel(group.status)} | ${group.failed_update_rows} phong khong cap nhat duoc | ${group.rooms_without_images} phong khong co anh | ${group.rooms_without_images_unknown} phong chua kiem tra duoc anh | Loi chinh: ${formatReasonList(group.top_update_error_reasons)}`,
+        `- CDT ${group.cdt_id} (${group.cdt_name}): ${formatCdtStatusLabel(group.status)} | ${group.failed_update_rows} phong khong cap nhat duoc | ${group.rooms_without_images} phong khong co anh | ${group.rooms_without_images_unknown} phong chua kiem tra duoc anh | Loi chinh: ${formatReasonList(group.top_update_error_reasons)}${cdtSuggestedActionText ? ` | Huong xu ly: ${cdtSuggestedActionText}` : ""}`,
       );
     });
   } else {
