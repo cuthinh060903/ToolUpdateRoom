@@ -202,3 +202,102 @@ Run room audit directly without scheduler wrapper:
 ```powershell
 npm run audit:room -- --send-telegram=true
 ```
+
+## Room Audit Manual Notes
+Use this section for manual `room-audit` runs only, without scheduler commands.
+
+### Change OpenClaw workspace path on another machine
+`room-audit` always writes:
+- `reports/room-audit/latest-room-audit.json`
+- `reports/room-audit/latest-room-audit.txt`
+- `reports/room-audit/latest-room-audit-summary.txt`
+
+It also copies `latest-room-audit-summary.txt` into the OpenClaw workspace.
+
+Default OpenClaw workspace path:
+- `C:/Users/thinh/.openclaw/workspace`
+
+Where to change it in code:
+- File: `modules/room-audit/index.js`
+- Constant: `OPENCLAW_WORKSPACE_DIR`
+
+Recommended ways to change path:
+1. Change the `OPENCLAW_WORKSPACE_DIR` constant directly when the machine path is fixed.
+2. Set env var `ROOM_AUDIT_OPENCLAW_WORKSPACE_DIR` when you want to keep the code unchanged.
+3. Pass `--openclaw-workspace-dir=...` for one specific run.
+
+Examples:
+```powershell
+$env:ROOM_AUDIT_OPENCLAW_WORKSPACE_DIR="D:/OpenClaw/workspace"
+npm run audit:room -- --send-telegram=false
+```
+
+```powershell
+npm run audit:room -- --send-telegram=false --openclaw-workspace-dir="D:/OpenClaw/workspace"
+```
+
+### Common room-audit commands
+Run all IDs:
+```powershell
+npm run audit:room -- --send-telegram=false
+```
+
+Run all IDs and send Telegram:
+```powershell
+npm run audit:room -- --send-telegram=true
+```
+
+Run 1 ID:
+```powershell
+npm run audit:room -- --ids=339 --send-telegram=false
+```
+
+Run many IDs:
+```powershell
+npm run audit:room -- --ids=339,340,341 --send-telegram=false
+```
+
+Run all IDs with debug log:
+```powershell
+npm run audit:room -- --send-telegram=false --debug=true
+```
+
+Run 1 ID with debug log:
+```powershell
+npm run audit:room -- --ids=339 --send-telegram=false --debug=true
+```
+
+Run many IDs and send Telegram:
+```powershell
+npm run audit:room -- --ids=339,340,341 --send-telegram=true
+```
+
+Quick smoke test with small scope:
+```powershell
+npm run audit:room -- --ids=339 --limit=1 --use-api=false --send-telegram=false --debug=true
+```
+
+Custom Rule 1 threshold:
+```powershell
+npm run audit:room -- --rule1-hours=12 --send-telegram=false
+```
+
+### Supported flags for manual room-audit run
+- `--ids=339,340,341`: run only the specified CDT IDs. If omitted, the tool runs all IDs.
+- `--send-telegram=true|false`: enable or disable Telegram sending.
+- `--debug=true|false`: show debug logs.
+- `--use-api=true|false`: enable or disable API enrichment.
+- `--limit=10`: stop after a specific number of audit rows.
+- `--rule1-hours=24`: change the stale threshold for Rule 1.
+- `--openclaw-workspace-dir="C:/path/to/workspace"`: override the OpenClaw copy target for this run only.
+
+### Expected output after a successful run
+- Timestamped files:
+  - `reports/room-audit/room-audit-YYYY-MM-DD-HH-mm-ss.json`
+  - `reports/room-audit/room-audit-YYYY-MM-DD-HH-mm-ss.txt`
+- Latest files:
+  - `reports/room-audit/latest-room-audit.json`
+  - `reports/room-audit/latest-room-audit.txt`
+  - `reports/room-audit/latest-room-audit-summary.txt`
+- OpenClaw copy target:
+  - `<OpenClaw workspace>/latest-room-audit-summary.txt`
