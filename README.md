@@ -12,6 +12,27 @@ Tool for updating room information from Google Sheets and sending notifications 
 npm install
 ```
 
+## Environment
+Create `.env` from `.env.example` and keep all Telegram bot tokens/chat IDs in this one file:
+
+```env
+TELEGRAM_BOT_TOKEN=bot_for_main_updater
+TELEGRAM_CHAT_ID=chat_id_for_main_updater_group
+ROOM_AUDIT_TELEGRAM_BOT_TOKEN=bot_for_assistant_report_group
+ROOM_AUDIT_TELEGRAM_CHAT_ID=chat_id_for_assistant_report_group
+```
+
+- `TELEGRAM_*` is used by the main room update flow (`index.js`) for trong/kin notifications.
+- `ROOM_AUDIT_TELEGRAM_*` is used only by `modules/room-audit`.
+- The app reads both targets from `.env`, so you no longer need to search in multiple files for Telegram credentials.
+- If `ROOM_AUDIT_TELEGRAM_*` is missing, room audit Telegram sending will be skipped instead of reusing the main updater group.
+
+To get the new assistant report group `chat_id`:
+1. Add the new bot into the new Telegram group and give it permission to send messages.
+2. Send at least one command such as `/start` in that group so the bot can receive an update.
+3. Open `https://api.telegram.org/bot<NEW_BOT_TOKEN>/getUpdates` in the browser.
+4. Find the group object and copy `chat.id` such as `-100xxxxxxxxxx`.
+
 ## Usage
 ```bash
 node index.js
@@ -68,7 +89,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-task.ps1 -Time
 
 Register multiple run times in one task:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-task.ps1 -Times "12:00","17:30" -TaskName "ToolUpdateRoom-TwiceDaily"
+powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-task.ps1 -Times "12:00","17:30" -TaskName "ToolUpdateRoom-TrongKin-TwiceDaily" -EntryScript "index.js" -LogPrefix "trong-kin-run"
 ```
 
 Stop the running scheduled task:
@@ -78,7 +99,7 @@ npm run schedule:stop
 
 Stop a specific task by name:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\stop-daily-task.ps1 -TaskName "ToolUpdateRoom-TwiceDaily"
+powershell -ExecutionPolicy Bypass -File .\scripts\stop-daily-task.ps1 -TaskName "ToolUpdateRoom-TrongKin-Daily"
 ```
 
 If a `node` process is still running and you want to stop it manually:
@@ -89,12 +110,95 @@ Stop-Process -Id <PID>
 
 If you want Windows to stop the running task instance directly:
 ```powershell
-schtasks /End /TN "ToolUpdateRoom-TwiceDaily"
+schtasks /End /TN "ToolUpdateRoom-TrongKin-Daily"
 ```
 
-Logs are written to `.\logs\daily-run-YYYY-MM-DD_HH-mm-ss.log`.
+Logs are written to `.\logs\<log-prefix>-YYYY-MM-DD_HH-mm-ss.log`.
 
-If you want to schedule the room audit module instead of the main updater:
+## Recommended Schedule Commands
+Use these 3 command groups from now on:
+
+### 1. Trong-kin only
+Create schedule:
+```bash
+npm run schedule:create:trong-kin
+```
+
+Cancel schedule:
+```bash
+npm run schedule:cancel:trong-kin
+```
+
+Run once:
+```bash
+npm run run:trong-kin
+```
+
+Preset:
+- Task name: `ToolUpdateRoom-TrongKin-Daily`
+- Entry script: `index.js`
+- Log prefix: `trong-kin-run`
+
+### 2. Room audit only
+Create schedule:
+```bash
+npm run schedule:create:room-audit
+```
+
+Cancel schedule:
+```bash
+npm run schedule:cancel:room-audit
+```
+
+Run once:
+```bash
+npm run run:room-audit
+```
+
+Preset:
+- Task name: `ToolUpdateRoom-RoomAudit-Daily`
+- Entry script: `modules/room-audit/index.js`
+- Log prefix: `room-audit-run`
+- Script arg: `--send-telegram=true`
+
+### 3. Run both trong-kin and room audit
+Create schedule:
+```bash
+npm run schedule:create:all
+```
+
+Cancel schedule:
+```bash
+npm run schedule:cancel:all
+```
+
+Run once:
+```bash
+npm run run:all
+```
+
+Preset:
+- Task name: `ToolUpdateRoom-All-Daily`
+- Entry script: `scripts/run-all-daily.js`
+- Log prefix: `all-run`
+- Flow order: `trong-kin` first, `room audit` second
+- Script arg: `--room-audit-send-telegram=true`
+
+### Change the schedule time
+All `schedule:create:*` commands use `05:00` by default because that is the default of `register-daily-task.ps1`.
+
+To use the same twice-daily pattern as the current updater task:
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-task.ps1 -EntryScript "modules/room-audit/index.js"
+npm run schedule:create:trong-kin -- -Times "12:00","17:30"
+npm run schedule:create:room-audit -- -Times "12:00","17:30"
+npm run schedule:create:all -- -Times "12:00","17:30"
+```
+
+### Important note about stop vs cancel
+- `schedule:stop*` only ends a running task instance.
+- `schedule:cancel:*` removes the schedule from Windows Task Scheduler.
+
+Run room audit directly without scheduler wrapper:
+```powershell
+npm run audit:room -- --send-telegram=true
 ```

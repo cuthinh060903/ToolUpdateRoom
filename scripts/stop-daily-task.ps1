@@ -1,5 +1,5 @@
 param(
-  [string]$TaskName = "ToolUpdateRoom-TwiceDaily"
+  [string]$TaskName = "ToolUpdateRoom-TrongKin-Daily"
 )
 
 $ErrorActionPreference = "Stop"

@@ -2,103 +2,183 @@
 
 ## Chốt cách đang dùng hiện tại
 
-Hiện tại tool này đang được cài để chạy theo **Windows Task Scheduler**.
+Hiện tại tool này chạy bằng **Windows Task Scheduler**.
 
 Nghĩa là:
 
 - Không cần mở file code rồi bỏ comment `cron.schedule(...)`
 - Không cần mở `node index.js` rồi để máy chạy suốt bằng tay
-- Windows sẽ tự gọi tool theo giờ đã cài
+- Đến giờ thì Windows sẽ tự gọi tool chạy
 
-Hiện đang cài lịch:
+Nói ngắn gọn:
 
-- `12:00 trưa`
-- `5:30 chiều`
+- **Dùng hẹn giờ của Windows**
+- **Không dùng cron trong code**
 
-Tên task đang dùng:
+## Hiện tại có 3 nhóm lệnh chính
 
-- `ToolUpdateRoom-TwiceDaily`
+Từ bây giờ mình chốt dùng đúng 3 nhóm:
 
-## Vì sao không dùng đoạn `cron.schedule(...)` trong code
+1. Chỉ chạy `trống kín`
+2. Chỉ chạy `room audit`
+3. Chạy `cả 2` chức năng trên cùng lúc
 
-Trong `index.js` có đoạn hẹn giờ, nhưng đoạn đó đang comment.
+Mỗi nhóm đều có:
 
-Nếu dùng cách đó thì phải:
+- lệnh `tạo lịch`
+- lệnh `hủy lịch`
+- lệnh `chạy thử 1 lần`
 
-- mở `node index.js`
-- để tiến trình Node chạy suốt cả ngày
-- không được tắt tiến trình đó
+## 1. Nhóm chỉ chạy trống kín
 
-Cách đó hợp khi chạy trên server hoặc VPS bật 24/24.
+Đây là luồng chính đang cập nhật phòng trống và phòng kín như trước giờ.
 
-Máy Windows cá nhân thì cách dễ hiểu và ổn định hơn là:
-
-- để `index.js` chỉ chạy 1 lần rồi thoát
-- đến giờ thì Windows tự gọi lại
-
-Nên hiện tại chốt là:
-
-- **Dùng Task Scheduler của Windows**
-- **Không mở comment `cron.schedule(...)`**
-
-## Cách chạy thủ công 1 lần
-
-Nếu muốn chạy thử ngay:
+### Tạo lịch
 
 ```powershell
-npm run run:daily
+npm run schedule:create:trong-kin
 ```
 
-Lệnh này sẽ chạy tool 1 lần và ghi log vào thư mục `logs`.
-
-## Cách cài lịch chạy tự động
-
-Nếu cần cài lại lịch:
+### Hủy lịch
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-task.ps1 -Times "12:00","17:30" -TaskName "ToolUpdateRoom-TwiceDaily"
+npm run schedule:cancel:trong-kin
 ```
 
-## Cách dừng task đang chạy tự động
+### Chạy thử 1 lần
 
-Nếu task đang chạy và muốn dừng:
+```powershell
+npm run run:trong-kin
+```
+
+### Thông tin của nhóm này
+
+- Tên task: `ToolUpdateRoom-TrongKin-Daily`
+- File chạy: `index.js`
+- Log ghi vào: `logs\trong-kin-run-YYYY-MM-DD_HH-mm-ss.log`
+
+## 2. Nhóm chỉ chạy room audit
+
+Nhóm này chỉ chạy báo cáo `room audit`.
+
+### Tạo lịch
+
+```powershell
+npm run schedule:create:room-audit
+```
+
+### Hủy lịch
+
+```powershell
+npm run schedule:cancel:room-audit
+```
+
+### Chạy thử 1 lần
+
+```powershell
+npm run run:room-audit
+```
+
+### Thông tin của nhóm này
+
+- Tên task: `ToolUpdateRoom-RoomAudit-Daily`
+- File chạy: `modules/room-audit/index.js`
+- Log ghi vào: `logs\room-audit-run-YYYY-MM-DD_HH-mm-ss.log`
+- Khi chạy preset này sẽ gửi Telegram room audit với tham số `--send-telegram=true`
+
+Nếu muốn chạy tay trực tiếp, không qua wrapper hẹn giờ:
+
+```powershell
+npm run audit:room -- --send-telegram=true
+```
+
+## 3. Nhóm chạy cả 2 chức năng cùng lúc
+
+Nhóm này sẽ chạy theo thứ tự:
+
+1. `trống kín`
+2. `room audit`
+
+### Tạo lịch
+
+```powershell
+npm run schedule:create:all
+```
+
+### Hủy lịch
+
+```powershell
+npm run schedule:cancel:all
+```
+
+### Chạy thử 1 lần
+
+```powershell
+npm run run:all
+```
+
+### Thông tin của nhóm này
+
+- Tên task: `ToolUpdateRoom-All-Daily`
+- File chạy: `scripts/run-all-daily.js`
+- Log ghi vào: `logs\all-run-YYYY-MM-DD_HH-mm-ss.log`
+
+## Nếu muốn đổi giờ chạy
+
+Mặc định các lệnh `schedule:create:*` sẽ cài giờ:
+
+- `05:00 sáng`
+
+Nếu muốn đổi sang giờ khác thì thêm `-- -Times`.
+
+Ví dụ muốn chạy `12:00 trưa` và `17:30 chiều`:
+
+### Trống kín
+
+```powershell
+npm run schedule:create:trong-kin -- -Times "12:00","17:30"
+```
+
+### Room audit
+
+```powershell
+npm run schedule:create:room-audit -- -Times "12:00","17:30"
+```
+
+### Cả 2 cùng chạy
+
+```powershell
+npm run schedule:create:all -- -Times "12:00","17:30"
+```
+
+Nếu muốn cài 1 giờ khác, ví dụ `09:00 sáng`, thì làm tương tự:
+
+```powershell
+npm run schedule:create:trong-kin -- -Times "09:00"
+```
+
+## Phân biệt rõ: dừng đang chạy và hủy lịch
+
+Hai việc này khác nhau:
+
+- `stop`: chỉ dừng lần chạy đang chạy dở
+- `cancel`: xóa lịch khỏi Windows, về sau sẽ không tự chạy nữa
+
+### Lệnh stop nếu cần dừng lần đang chạy
 
 ```powershell
 npm run schedule:stop
+npm run schedule:stop:room-audit
+npm run schedule:stop:all
 ```
 
-Hoặc:
+### Lệnh cancel nếu muốn hủy lịch hẳn
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\stop-daily-task.ps1 -TaskName "ToolUpdateRoom-TwiceDaily"
+npm run schedule:cancel:trong-kin
+npm run schedule:cancel:room-audit
+npm run schedule:cancel:all
 ```
-
-## Nếu muốn ngưng hẳn lịch tự động về sau
-
-Nếu không muốn tool tự chạy nữa theo giờ đã cài, có 2 cách:
-
-### Cách 1: Tắt lịch nhưng vẫn giữ task
-
-```powershell
-schtasks /Change /TN "ToolUpdateRoom-TwiceDaily" /Disable
-```
-
-Khi muốn bật lại:
-
-```powershell
-schtasks /Change /TN "ToolUpdateRoom-TwiceDaily" /Enable
-```
-
-### Cách 2: Xóa hẳn task khỏi máy
-
-```powershell
-schtasks /Delete /TN "ToolUpdateRoom-TwiceDaily" /F
-```
-
-Ý nghĩa:
-
-- `Disable`: chỉ tắt lịch, sau này có thể bật lại
-- `Delete`: xóa hẳn task, muốn dùng lại thì phải đăng ký lại từ đầu
 
 ## Nếu có tiến trình Node còn chạy
 
@@ -124,45 +204,42 @@ Ví dụ:
 Stop-Process -Id 52860
 ```
 
-## Điều kiện để tự chạy đúng giờ
+## Điều kiện để tool tự chạy đúng giờ
 
-Để đến `12:00` và `17:30` tool tự chạy, cần:
+Để đến giờ Windows tự chạy đúng, cần:
 
 - Máy đang bật
 - Máy không ở chế độ sleep đúng giờ đó
 - User đang đăng nhập Windows
 - Có mạng Internet
 
-## Nếu sau này chuyển sang VPS hoặc server
+## Vì sao không dùng `cron.schedule(...)` trong code
 
-Khi chuyển sang VPS/server bật 24/24 thì có 2 hướng:
+Trong code vẫn có đoạn `cron.schedule(...)`, nhưng đó là cách cũ hoặc cách khác.
 
-- vẫn dùng scheduler của hệ điều hành
-- hoặc dùng `cron` / `pm2`
+Nếu dùng cách đó thì phải:
 
-Nhưng ở máy hiện tại, cách đang dùng là:
+- mở tiến trình Node suốt cả ngày
+- không được tắt tiến trình đó
 
-- **Windows Task Scheduler**
+Cách đó hợp với server hoặc VPS bật 24/24.
 
-## Ghi chú để tránh hiểu nhầm
+Máy Windows cá nhân thì cách ổn hơn là:
 
-Nếu thấy trong code có đoạn:
+- để file chạy xong rồi thoát
+- đến giờ Windows tự gọi lại
 
-- `cron.schedule('0 4 * * *', ...)`
-- `cron.schedule('0 5 * * *', ...)`
+Nên hiện tại mình chốt:
 
-thì hiểu là:
-
-- đó là **cách cũ / cách khác**
-- hiện tại **không dùng cách đó**
-
-Cách đang dùng thực tế là:
-
-- Windows đến giờ sẽ chạy script `scripts/run-daily.ps1`
-- script này sẽ gọi `node index.js`
+- **Dùng Windows Task Scheduler**
+- **Không dùng cron trong code**
 
 ## Kết luận ngắn gọn
 
-Nếu chú hỏi “tool đang chạy theo cách nào”, câu trả lời là:
+Nếu chú hỏi:
+
+“Tool đang chạy theo cách nào?”
+
+Thì câu trả lời là:
 
 **Hiện tại tool đang chạy bằng hẹn giờ của Windows, không phải cron trong code.**

@@ -2,7 +2,7 @@ const fs = require("fs").promises;
 const path = require("path");
 const { UpdateRoomSari } = require("../../index");
 const { normalizeRoomReport } = require("./normalize-room-report");
-const { buildReport } = require("./build-report");
+const { buildReport, formatLocalDateTime } = require("./build-report");
 const { sendAuditTelegram } = require("./send-telegram");
 
 const LOG_FILES = [
@@ -14,6 +14,7 @@ const LOG_FILES = [
   "nhamoi.txt",
   "khongcodulieu.txt",
 ];
+const MAX_ROOM_PROBE_CANDIDATES = 3;
 
 function toBoolean(value, defaultValue = false) {
   if (value === undefined || value === null || value === "") {
@@ -43,12 +44,49 @@ function parseArgs(argv = []) {
   return parsed;
 }
 
+function debugLog(enabled, message, payload) {
+  if (!enabled) {
+    return;
+  }
+
+  if (payload === undefined) {
+    console.log(`[room-audit][debug] ${message}`);
+    return;
+  }
+
+  console.log(`[room-audit][debug] ${message}:`, payload);
+}
+
 function lineContainsAll(line, fragments = []) {
   return fragments.filter(Boolean).every((fragment) => line.includes(fragment));
 }
 
+function isMissingDriverGgsheetLog(line = "") {
+  return line.toString().toUpperCase().includes("KHÔNG CÓ LINK DRIVER");
+}
+
 async function ensureDirectory(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
+}
+
+async function writeReportFiles({
+  report,
+  jsonPath,
+  txtPath,
+  summaryPath = null,
+}) {
+  const writeTasks = [
+    fs.writeFile(jsonPath, JSON.stringify(report, null, 2), "utf8"),
+    fs.writeFile(txtPath, report.text_report, "utf8"),
+  ];
+
+  if (summaryPath) {
+    writeTasks.push(
+      fs.writeFile(summaryPath, report.business_summary_text || "", "utf8"),
+    );
+  }
+
+  await Promise.all(writeTasks);
 }
 
 async function readLogLines(rootDir, fileName) {
@@ -75,11 +113,15 @@ async function loadLogSources(rootDir) {
   return result;
 }
 
-function pickLogMatches(logSources, config, sheetGid, row) {
+function pickLogMatches(logSources, config, sheetGid, row, room = null) {
   const sheetKey = `${config.link}${sheetGid}`;
   const address = row?.ADDRESS || "";
   const roomName = row?.ROOMS || "";
   const imageDriver = row?.IMAGE_DRIVER || "";
+  const originLink = room?.origin_link || "";
+  const hasCurrentImageSource = Boolean(
+    imageDriver.toString().trim() || originLink.toString().trim(),
+  );
 
   const selectors = {
     ggsheet: [sheetKey, address],
@@ -91,12 +133,20 @@ function pickLogMatches(logSources, config, sheetGid, row) {
     khongcodulieu: [sheetKey, address],
   };
 
-  return Object.fromEntries(
+  const matches = Object.fromEntries(
     Object.entries(selectors).map(([key, fragments]) => [
       key,
       (logSources[key] || []).filter((line) => lineContainsAll(line, fragments)),
     ]),
   );
+
+  if (hasCurrentImageSource) {
+    matches.ggsheet = (matches.ggsheet || []).filter(
+      (line) => !isMissingDriverGgsheetLog(line),
+    );
+  }
+
+  return matches;
 }
 
 async function countRoomImages(updater, roomId) {
@@ -129,43 +179,296 @@ async function countRoomImages(updater, roomId) {
   return count;
 }
 
+function sortScoredBuildingCandidates(scoredMatches = []) {
+  return [...scoredMatches].sort((a, b) => {
+    if (a.accepted !== b.accepted) {
+      return a.accepted ? -1 : 1;
+    }
+    if (b.matchScore !== a.matchScore) {
+      return b.matchScore - a.matchScore;
+    }
+    if (b.exactTextScore !== a.exactTextScore) {
+      return b.exactTextScore - a.exactTextScore;
+    }
+    return 0;
+  });
+}
+
+function buildRankedBuildingCandidates(
+  updater,
+  searchTerm,
+  buildingList,
+  config = {},
+) {
+  const processedSearchTerm = updater.normalizeSheetCellText(searchTerm);
+  if (!processedSearchTerm) {
+    return [];
+  }
+
+  const normalizedSearchKey =
+    updater.normalizeComparableText(processedSearchTerm);
+  const configuredAliases = config?.address_aliases || {};
+  const aliasSearchTerm =
+    Object.entries(configuredAliases).find(
+      ([alias]) =>
+        updater.normalizeComparableText(alias) === normalizedSearchKey,
+    )?.[1] || processedSearchTerm;
+  const searchableList = updater.filterRealnewsForMatching(
+    buildingList,
+    config,
+  ).map((item) => ({
+    ...item,
+    address: item?.address || item?.address_valid || item?.name || "",
+    searchableAddress: updater.getBuildingSearchAddress(item),
+  }));
+
+  const rankedCandidates = sortScoredBuildingCandidates(
+    searchableList
+      .map((item) => updater.scoreAddressCandidate(aliasSearchTerm, item, config))
+      .filter(Boolean),
+  );
+  const topCandidate = rankedCandidates[0];
+
+  if (!topCandidate?.item) {
+    return rankedCandidates;
+  }
+
+  const normalizedSearchTerm =
+    updater.normalizeComparableText(processedSearchTerm);
+  const normalizedCandidateAddress = updater.normalizeComparableText(
+    topCandidate.candidateVariant || "",
+  );
+  const keywordTokens = updater.extractAddressKeywordTokens(processedSearchTerm);
+
+  if (
+    config?.require_address_detail_for_match &&
+    normalizedSearchTerm &&
+    !/\d/.test(normalizedSearchTerm) &&
+    keywordTokens.length <= 1 &&
+    normalizedSearchTerm !== normalizedCandidateAddress
+  ) {
+    rankedCandidates[0] = {
+      ...topCandidate,
+      accepted: false,
+      rejectReason: "address_too_generic",
+    };
+  }
+
+  return rankedCandidates;
+}
+
+async function loadRoomListForBuilding(
+  updater,
+  buildingId,
+  roomCache,
+  apiErrors = {},
+) {
+  if (!buildingId) {
+    return { loaded: false, rooms: [] };
+  }
+
+  if (roomCache.has(buildingId)) {
+    return roomCache.get(buildingId);
+  }
+
+  try {
+    const searchRooms = await updater.searchRoom(buildingId);
+    const result = {
+      loaded: true,
+      rooms: searchRooms?.content || [],
+    };
+    roomCache.set(buildingId, result);
+    return result;
+  } catch (error) {
+    const result = {
+      loaded: false,
+      rooms: [],
+    };
+    roomCache.set(buildingId, result);
+    if (!apiErrors.search_room) {
+      apiErrors.search_room = error?.message || String(error);
+    }
+    return result;
+  }
+}
+
+function findMatchedRoomFromCandidates(
+  updater,
+  rooms = [],
+  roomCandidates = [],
+  type = "chdv",
+) {
+  for (const roomCandidate of roomCandidates) {
+    const room = updater.findMatchedRoom(rooms, roomCandidate, type);
+    if (room) {
+      return room;
+    }
+  }
+
+  return null;
+}
+
+async function probeRoomExistsOnBuilding(
+  updater,
+  buildingId,
+  roomCandidates,
+  type,
+  roomCache,
+  apiErrors = {},
+) {
+  if (!buildingId || !Array.isArray(roomCandidates) || roomCandidates.length === 0) {
+    return null;
+  }
+
+  const { loaded, rooms } = await loadRoomListForBuilding(
+    updater,
+    buildingId,
+    roomCache,
+    apiErrors,
+  );
+
+  if (!loaded) {
+    return null;
+  }
+
+  return Boolean(findMatchedRoomFromCandidates(updater, rooms, roomCandidates, type));
+}
+
+function getRoomProbeCandidateIds(
+  rankedCandidates = [],
+  limit = MAX_ROOM_PROBE_CANDIDATES,
+) {
+  const candidateIds = [];
+
+  for (const candidate of rankedCandidates) {
+    const buildingId = candidate?.item?.id;
+    if (!buildingId || candidateIds.includes(buildingId)) {
+      continue;
+    }
+
+    candidateIds.push(buildingId);
+    if (candidateIds.length >= limit) {
+      break;
+    }
+  }
+
+  return candidateIds;
+}
+
+async function probeRoomExistsOnAnyCandidate(
+  updater,
+  rankedCandidates,
+  roomCandidates,
+  type,
+  roomCache,
+  apiErrors = {},
+) {
+  if (!Array.isArray(roomCandidates) || roomCandidates.length === 0) {
+    return null;
+  }
+
+  const candidateIds = getRoomProbeCandidateIds(rankedCandidates);
+  if (candidateIds.length === 0) {
+    return null;
+  }
+
+  let hasLoadedCandidate = false;
+
+  for (const buildingId of candidateIds) {
+    const exists = await probeRoomExistsOnBuilding(
+      updater,
+      buildingId,
+      roomCandidates,
+      type,
+      roomCache,
+      apiErrors,
+    );
+    if (exists === true) {
+      return true;
+    }
+    if (exists === false) {
+      hasLoadedCandidate = true;
+    }
+  }
+
+  return hasLoadedCandidate ? false : null;
+}
+
 async function enrichWithApi(updater, config, row, buildingList, roomCache) {
   const apiErrors = {};
   let building = null;
   let room = null;
   let imageCount = null;
+  let rankedBuildingCandidates = [];
+  let roomCandidates = [];
 
   try {
-    building = await updater.fuzzySearch(row.ADDRESS, buildingList, config);
+    rankedBuildingCandidates = buildRankedBuildingCandidates(
+      updater,
+      row.ADDRESS,
+      buildingList,
+      config,
+    );
+    if (rankedBuildingCandidates[0]?.accepted && rankedBuildingCandidates[0]?.item) {
+      building = rankedBuildingCandidates[0].item;
+    }
   } catch (error) {
     apiErrors.search_realnew = error?.message || String(error);
   }
 
-  if (building?.id) {
-    if (!roomCache.has(building.id)) {
-      try {
-        const searchRooms = await updater.searchRoom(building.id);
-        roomCache.set(building.id, searchRooms?.content || []);
-      } catch (error) {
-        apiErrors.search_room = error?.message || String(error);
-        roomCache.set(building.id, []);
-      }
-    }
+  try {
+    roomCandidates = await updater.replaceAbbreviations(row.ROOMS, config.type);
+  } catch (error) {
+    apiErrors.search_room = error?.message || String(error);
+    roomCandidates = [];
+  }
 
-    const roomList = roomCache.get(building.id) || [];
-    try {
-      const roomCandidates = await updater.replaceAbbreviations(
-        row.ROOMS,
+  if (building?.id) {
+    const { loaded, rooms } = await loadRoomListForBuilding(
+      updater,
+      building.id,
+      roomCache,
+      apiErrors,
+    );
+    if (loaded) {
+      room = findMatchedRoomFromCandidates(
+        updater,
+        rooms,
+        roomCandidates,
         config.type,
       );
-      for (const roomCandidate of roomCandidates) {
-        room = updater.findMatchedRoom(roomList, roomCandidate, config.type);
-        if (room) {
-          break;
-        }
-      }
-    } catch (error) {
-      apiErrors.search_room = error?.message || String(error);
+    }
+  }
+
+  const topBuildingCandidate = rankedBuildingCandidates[0] || null;
+  let roomExistsOnTopCandidate = null;
+  if (topBuildingCandidate?.item?.id) {
+    if (building?.id && topBuildingCandidate.item.id === building.id) {
+      roomExistsOnTopCandidate = Boolean(room?.id);
+    } else {
+      roomExistsOnTopCandidate = await probeRoomExistsOnBuilding(
+        updater,
+        topBuildingCandidate.item.id,
+        roomCandidates,
+        config.type,
+        roomCache,
+        apiErrors,
+      );
+    }
+  }
+
+  let roomExistsOnAnyCandidate = roomExistsOnTopCandidate;
+  if (roomExistsOnAnyCandidate !== true) {
+    const anyCandidateProbe = await probeRoomExistsOnAnyCandidate(
+      updater,
+      rankedBuildingCandidates,
+      roomCandidates,
+      config.type,
+      roomCache,
+      apiErrors,
+    );
+    if (anyCandidateProbe !== null) {
+      roomExistsOnAnyCandidate = anyCandidateProbe;
     }
   }
 
@@ -182,12 +485,25 @@ async function enrichWithApi(updater, config, row, buildingList, roomCache) {
     room,
     imageCount,
     apiErrors,
+    matchContext: {
+      topBuildingCandidate: topBuildingCandidate?.item || null,
+      topBuildingCandidateScore: Number.isFinite(topBuildingCandidate?.matchScore)
+        ? topBuildingCandidate.matchScore
+        : null,
+      topBuildingCandidateRejectReason: topBuildingCandidate?.accepted
+        ? ""
+        : topBuildingCandidate?.rejectReason || "",
+      roomExistsOnTopCandidate: roomExistsOnTopCandidate,
+      roomExistsOnAnyCandidate: roomExistsOnAnyCandidate,
+    },
   };
 }
 
 function buildRunOptions(argv = [], env = process.env) {
   const args = parseArgs(argv);
-  const onlyIds = (args.ids || env.ROOM_AUDIT_ONLY_IDS || "")
+  const onlyIdsSource =
+    args.ids ?? env.ROOM_AUDIT_ONLY_IDS ?? env.npm_config_ids ?? "";
+  const onlyIds = onlyIdsSource
     .toString()
     .split(",")
     .map((value) => value.trim())
@@ -196,16 +512,30 @@ function buildRunOptions(argv = [], env = process.env) {
     .filter((value) => Number.isFinite(value));
 
   return {
-    useApi: toBoolean(args["use-api"] ?? env.ROOM_AUDIT_USE_API, true),
+    useApi: toBoolean(
+      args["use-api"] ?? env.ROOM_AUDIT_USE_API ?? env.npm_config_use_api,
+      true,
+    ),
     sendTelegram: toBoolean(
-      args["send-telegram"] ?? env.ROOM_AUDIT_SEND_TELEGRAM,
+      args["send-telegram"] ??
+        env.ROOM_AUDIT_SEND_TELEGRAM ??
+        env.npm_config_send_telegram,
       false,
     ),
-    limit: parseNumber(args.limit ?? env.ROOM_AUDIT_LIMIT, null),
+    limit: parseNumber(
+      args.limit ?? env.ROOM_AUDIT_LIMIT ?? env.npm_config_limit,
+      null,
+    ),
     onlyIds,
     rule1ThresholdHours: parseNumber(
-      args["rule1-hours"] ?? env.ROOM_AUDIT_RULE1_HOURS,
+      args["rule1-hours"] ??
+        env.ROOM_AUDIT_RULE1_HOURS ??
+        env.npm_config_rule1_hours,
       24,
+    ),
+    debug: toBoolean(
+      args.debug ?? env.ROOM_AUDIT_DEBUG ?? env.npm_config_debug,
+      false,
     ),
   };
 }
@@ -225,6 +555,14 @@ async function runAuditFlow(options = {}) {
 
     return options.onlyIds.includes(Number(config.id));
   });
+
+  debugLog(options.debug, "parsed-options", options);
+  debugLog(options.debug, "config-count-after-filter", configs.length);
+  debugLog(
+    options.debug,
+    "config-ids-after-filter",
+    configs.map((config) => config.id),
+  );
 
   await ensureDirectory(outputDir);
 
@@ -261,10 +599,17 @@ async function runAuditFlow(options = {}) {
         continue;
       }
 
+      debugLog(
+        options.debug,
+        `rows-from-sheet cdt=${config.id} gid=${sheetGid}`,
+        processedRows.length,
+      );
+
       for (const row of processedRows) {
         let building = null;
         let room = null;
         let imageCount = null;
+        let matchContext = {};
         let apiErrors = {};
 
         if (options.useApi) {
@@ -279,9 +624,16 @@ async function runAuditFlow(options = {}) {
           room = apiResult.room;
           imageCount = apiResult.imageCount;
           apiErrors = apiResult.apiErrors;
+          matchContext = apiResult.matchContext;
         }
 
-        const logMatches = pickLogMatches(logSources, config, sheetGid, row);
+        const logMatches = pickLogMatches(
+          logSources,
+          config,
+          sheetGid,
+          row,
+          room,
+        );
         const normalizedRow = normalizeRoomReport({
           config,
           sheetGid,
@@ -289,12 +641,14 @@ async function runAuditFlow(options = {}) {
           building,
           room,
           imageCount,
+          matchContext,
           logMatches,
           apiErrors,
         });
 
         rows.push(normalizedRow);
         if (Number.isFinite(options.limit) && rows.length >= options.limit) {
+          debugLog(options.debug, "limit-hit-final-row-count", rows.length);
           break;
         }
       }
@@ -315,15 +669,41 @@ async function runAuditFlow(options = {}) {
     options,
   });
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  if (options.debug) {
+    const rowsByCdt = rows.reduce((accumulator, row) => {
+      const key = String(row.cdt_id);
+      accumulator[key] = (accumulator[key] || 0) + 1;
+      return accumulator;
+    }, {});
+    debugLog(options.debug, "final-rows-after-limit", rows.length);
+    debugLog(options.debug, "final-rows-by-cdt", rowsByCdt);
+  }
+
+  const timestamp = formatLocalDateTime(new Date()).replace(/[: ]/g, "-");
   const jsonPath = path.join(outputDir, `room-audit-${timestamp}.json`);
   const txtPath = path.join(outputDir, `room-audit-${timestamp}.txt`);
+  const latestJsonPath = path.join(outputDir, "latest-room-audit.json");
+  const latestTxtPath = path.join(outputDir, "latest-room-audit.txt");
+  const latestSummaryPath = path.join(
+    outputDir,
+    "latest-room-audit-summary.txt",
+  );
 
-  await fs.writeFile(jsonPath, JSON.stringify(report, null, 2), "utf8");
-  await fs.writeFile(txtPath, report.text_report, "utf8");
+  await writeReportFiles({
+    report,
+    jsonPath,
+    txtPath,
+  });
+  await writeReportFiles({
+    report,
+    jsonPath: latestJsonPath,
+    txtPath: latestTxtPath,
+    summaryPath: latestSummaryPath,
+  });
 
   const telegramResult = await sendAuditTelegram(report, {
     enabled: options.sendTelegram,
+    message: report.business_summary_text,
   });
 
   return {
@@ -331,6 +711,9 @@ async function runAuditFlow(options = {}) {
     output: {
       jsonPath,
       txtPath,
+      latestJsonPath,
+      latestTxtPath,
+      latestSummaryPath,
     },
     telegramResult,
   };
@@ -342,6 +725,9 @@ if (require.main === module) {
     .then(({ output, telegramResult, report }) => {
       console.log(`[room-audit] JSON report: ${output.jsonPath}`);
       console.log(`[room-audit] Text report: ${output.txtPath}`);
+      console.log(`[room-audit] Latest JSON report: ${output.latestJsonPath}`);
+      console.log(`[room-audit] Latest text report: ${output.latestTxtPath}`);
+      console.log(`[room-audit] Latest summary report: ${output.latestSummaryPath}`);
       console.log(`[room-audit] Total rows: ${report.total_rows}`);
       console.log(
         `[room-audit] Telegram: ${telegramResult.sent ? "sent" : telegramResult.reason}`,

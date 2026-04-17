@@ -5227,8 +5227,6 @@ function clearFile() {
   });
 }
 
-const reg = new UpdateRoomSari();
-
 // // cái này chạy theo thời gian
 
 // Lịch trình để xóa nội dung tệp tin vào lúc 4 giờ sáng
@@ -5240,13 +5238,18 @@ const reg = new UpdateRoomSari();
 // // // Lịch trình để chạy công việc vào lúc 5 giờ sáng
 // cron.schedule('0 5 * * *', async () => {
 //   console.log('Running task at 5:00 AM');
-//   await reg.run();
+//   await runMainFlow();
 // });
 
 // cái này chạy trực tiếp thì phải tắt hẹn giờ ở trên đi từ 2485--> 2495
-if (require.main === module) {
-  reg.run();
+async function runMainFlow() {
+  const reg = new UpdateRoomSari();
+  return reg.run();
 }
-module.exports = { UpdateRoomSari };
+
+if (require.main === module) {
+  runMainFlow();
+}
+module.exports = { UpdateRoomSari, runMainFlow };
 
 // ưng chạy cái nào thì mở 1 trong 2 rồi ra lệnh node.ndex.js -> sp cái này lần cuối nhé.

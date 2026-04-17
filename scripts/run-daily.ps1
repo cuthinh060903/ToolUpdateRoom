@@ -2,6 +2,7 @@ param(
   [string]$RepoRoot,
   [string]$EntryScript = "index.js",
   [string]$LogDir = "logs",
+  [string]$LogPrefix = "daily-run",
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$ScriptArgs
 )
@@ -18,13 +19,25 @@ Set-Location $RepoRoot
 $resolvedLogDir = Join-Path $RepoRoot $LogDir
 New-Item -ItemType Directory -Force -Path $resolvedLogDir | Out-Null
 
+if ([string]::IsNullOrWhiteSpace($LogPrefix)) {
+  $LogPrefix = "daily-run"
+}
+
+$invalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
+foreach ($invalidChar in $invalidFileNameChars) {
+  $LogPrefix = $LogPrefix.Replace($invalidChar, "-")
+}
+
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$logFile = Join-Path $resolvedLogDir "daily-run-$timestamp.log"
+$logFile = Join-Path $resolvedLogDir "$LogPrefix-$timestamp.log"
 $nodeCommand = Get-Command node -ErrorAction Stop
 
 Write-Host "[scheduler] Repo root: $RepoRoot"
 Write-Host "[scheduler] Entry script: $EntryScript"
 Write-Host "[scheduler] Log file: $logFile"
+if ($ScriptArgs.Count -gt 0) {
+  Write-Host "[scheduler] Script args: $($ScriptArgs -join ' ')"
+}
 
 function Quote-CmdArgument([string]$value) {
   if ($null -eq $value) {

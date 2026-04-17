@@ -26,6 +26,7 @@ function normalizeRoomReport({
   building = null,
   room = null,
   imageCount = null,
+  matchContext = {},
   logMatches = {},
   apiErrors = {},
 } = {}) {
@@ -54,6 +55,30 @@ function normalizeRoomReport({
     building_code: normalizeText(building?.code),
     building_address: normalizeText(building?.address_valid || building?.address),
     building_updated_at: building?.updated_at || null,
+    top_building_candidate_id: matchContext?.topBuildingCandidate?.id ?? null,
+    top_building_candidate_title: normalizeText(
+      matchContext?.topBuildingCandidate?.title ||
+        matchContext?.topBuildingCandidate?.name ||
+        matchContext?.topBuildingCandidate?.code,
+    ),
+    top_building_candidate_address_valid: normalizeText(
+      matchContext?.topBuildingCandidate?.address_valid ||
+        matchContext?.topBuildingCandidate?.address,
+    ),
+    top_building_candidate_score: normalizeNumber(
+      matchContext?.topBuildingCandidateScore,
+    ),
+    top_building_candidate_reject_reason: normalizeText(
+      matchContext?.topBuildingCandidateRejectReason,
+    ),
+    room_exists_on_top_candidate:
+      typeof matchContext?.roomExistsOnTopCandidate === "boolean"
+        ? matchContext.roomExistsOnTopCandidate
+        : null,
+    room_exists_on_any_candidate:
+      typeof matchContext?.roomExistsOnAnyCandidate === "boolean"
+        ? matchContext.roomExistsOnAnyCandidate
+        : null,
     room_id: room?.id ?? null,
     room_real_new_id: room?.real_new_id ?? building?.id ?? null,
     room_name_web: normalizeText(room?.name),
