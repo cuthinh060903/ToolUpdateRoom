@@ -1,3 +1,5 @@
+const { normalizeVietnameseKey } = require("./text-normalize");
+
 const ROOT_CAUSE = {
   ADDRESS_BUILDING: "ADDRESS_BUILDING",
   ROOM_NAME: "ROOM_NAME",
@@ -19,7 +21,7 @@ const SOFT_BUILDING_REJECT_REASONS = new Set([
 ]);
 
 function normalizeKeyText(value = "") {
-  return value.toString().trim().toLowerCase();
+  return normalizeVietnameseKey(value);
 }
 
 function buildAddressBusinessKey(row = {}) {
@@ -83,7 +85,7 @@ function classifyRootCause(row = {}, evidence = {}) {
   if (buildingMatched && !roomMatched) {
     return {
       root_cause: ROOT_CAUSE.ROOM_NAME,
-      root_cause_note: "Building da match nhung room chua match.",
+      root_cause_note: "Building đã match nhưng room chưa match.",
       root_cause_source: "derived",
     };
   }
@@ -97,7 +99,7 @@ function classifyRootCause(row = {}, evidence = {}) {
     return {
       root_cause: ROOT_CAUSE.UNKNOWN,
       root_cause_note:
-        "Row co canh bao nhung khong roi vao nhanh building/room mapping.",
+        "Row có cảnh báo nhưng không rơi vào nhánh building/room mapping.",
       root_cause_source: "derived",
     };
   }
@@ -120,7 +122,7 @@ function classifyRootCause(row = {}, evidence = {}) {
     return {
       root_cause: ROOT_CAUSE.ADDRESS_BUILDING,
       root_cause_note:
-        "Fail o buoc building va da thay room tren candidate building.",
+        "Fail ở bước building và đã thấy room trên candidate building.",
       root_cause_source: "derived",
     };
   }
@@ -129,7 +131,7 @@ function classifyRootCause(row = {}, evidence = {}) {
     return {
       root_cause: ROOT_CAUSE.ADDRESS_BUILDING,
       root_cause_note:
-        "Cung dia chi da co signal building o log/row khac, nghieng ve ADDRESS_BUILDING.",
+        "Cùng địa chỉ đã có signal building ở log/row khác, nghiêng về ADDRESS_BUILDING.",
       root_cause_source: "derived",
     };
   }
@@ -139,8 +141,8 @@ function classifyRootCause(row = {}, evidence = {}) {
     return {
       root_cause: ROOT_CAUSE.ADDRESS_BUILDING,
       root_cause_note: scoreSuffix
-        ? `Top candidate bi reject mem (${rejectReason}) voi score ${scoreSuffix}.`
-        : `Top candidate bi reject mem (${rejectReason}).`,
+        ? `Top candidate bị reject mềm (${rejectReason}) với score ${scoreSuffix}.`
+        : `Top candidate bị reject mềm (${rejectReason}).`,
       root_cause_source: "derived",
     };
   }
@@ -149,7 +151,7 @@ function classifyRootCause(row = {}, evidence = {}) {
     return {
       root_cause: ROOT_CAUSE.DOWNSTREAM_BUILDING_UNRESOLVED,
       root_cause_note:
-        "Chua co top building candidate de chot nguyen nhan business.",
+        "Chưa có top building candidate để chốt nguyên nhân business.",
       root_cause_source: "derived",
     };
   }
@@ -157,7 +159,7 @@ function classifyRootCause(row = {}, evidence = {}) {
   if (HARD_BUILDING_REJECT_REASONS.has(rejectReason)) {
     return {
       root_cause: ROOT_CAUSE.DOWNSTREAM_BUILDING_UNRESOLVED,
-      root_cause_note: `Top candidate bi reject cung (${rejectReason}).`,
+      root_cause_note: `Top candidate bị reject cứng (${rejectReason}).`,
       root_cause_source: "derived",
     };
   }
@@ -166,7 +168,7 @@ function classifyRootCause(row = {}, evidence = {}) {
     return {
       root_cause: ROOT_CAUSE.DOWNSTREAM_BUILDING_UNRESOLVED,
       root_cause_note:
-        "Co ADDRESS_MISMATCH_LOGGED nhung signal hien tai chua du de chot building.",
+        "Có ADDRESS_MISMATCH_LOGGED nhưng signal hiện tại chưa đủ để chốt building.",
       root_cause_source: "derived",
     };
   }
@@ -174,7 +176,7 @@ function classifyRootCause(row = {}, evidence = {}) {
   return {
     root_cause: ROOT_CAUSE.UNKNOWN,
     root_cause_note:
-      "Signal hien tai chua du de quy ve ADDRESS_BUILDING hay ROOM_NAME.",
+      "Signal hiện tại chưa đủ để quy về ADDRESS_BUILDING hay ROOM_NAME.",
     root_cause_source: "derived",
   };
 }
