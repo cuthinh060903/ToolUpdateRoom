@@ -890,7 +890,12 @@ function buildCompactGroupSummary(groups = [], options = {}) {
     return "Không";
   }
 
-  const limit = Number.isFinite(options?.limit) ? options.limit : 5;
+  const includeAll = Boolean(options?.includeAll);
+  const limit = includeAll
+    ? normalizedGroups.length
+    : Number.isFinite(options?.limit)
+      ? options.limit
+      : 5;
   const renderedGroups = normalizedGroups
     .slice(0, limit)
     .map((group) => buildCompactCdtToken(group, options))
@@ -901,7 +906,11 @@ function buildCompactGroupSummary(groups = [], options = {}) {
   }
 
   const remainingCount = normalizedGroups.length - renderedGroups.length;
-  if (remainingCount <= 0) {
+  if (
+    remainingCount <= 0 ||
+    includeAll ||
+    options?.includeOverflow === false
+  ) {
     return renderedGroups.join(", ");
   }
 
@@ -1639,7 +1648,7 @@ function buildDailySheetSummary(report, options = {}) {
   );
   const compactGroupLimit = Number.isFinite(options?.dailySummaryGroupLimit)
     ? options.dailySummaryGroupLimit
-    : 5;
+    : Number.MAX_SAFE_INTEGER;
   const hasAnyIssue =
     sourceErrorTotal > 0 ||
     code4Total > 0 ||
@@ -1668,30 +1677,35 @@ function buildDailySheetSummary(report, options = {}) {
     context.sourceErrorGroups.length > 0
       ? `Có | ${buildCompactGroupSummary(context.sourceErrorGroups, {
           limit: compactGroupLimit,
+          includeOverflow: false,
           overflowLabel: "CDT khác",
         })}`
       : "Không",
     addressFieldGroups.length > 0
       ? `Có | ${buildCompactGroupSummary(addressFieldGroups, {
           limit: compactGroupLimit,
+          includeOverflow: false,
           overflowLabel: "CDT khác",
         })}`
       : "Không",
     roomNameFieldGroups.length > 0
       ? `Có | ${buildCompactGroupSummary(roomNameFieldGroups, {
           limit: compactGroupLimit,
+          includeOverflow: false,
           overflowLabel: "CDT khác",
         })}`
       : "Không",
     context.code6Groups.length > 0
       ? `Có | ${buildCompactGroupSummary(context.code6Groups, {
           limit: compactGroupLimit,
+          includeOverflow: false,
           overflowLabel: "CDT khác",
         })}`
       : "Không",
     context.code4Groups.length > 0
       ? `Có | ${buildCompactGroupSummary(context.code4Groups, {
           limit: compactGroupLimit,
+          includeOverflow: false,
           includeName: true,
           includeCount: true,
           countField: "affected_buildings",
@@ -2513,13 +2527,22 @@ function buildReport({
   report.daily_sheet_summary = buildDailySheetSummary(report, options);
   report.telegram_short_message =
     report.daily_sheet_summary?.telegram_text || "";
+  report.telegram_business_message = truncateTelegramText(
+    report.business_summary_text || "",
+    Number.isFinite(options?.telegramMaxLength)
+      ? options.telegramMaxLength
+      : 3500,
+  );
   report.openclaw_summary_text = buildDetailedSummaryText(report, options);
   report.technical_report = buildTechnicalReport(report, options);
   report.text_report = buildTextReport(report, options);
   if (options.skipTelegramMessages) {
     report.telegram_messages = [];
     report.telegram_message = truncateTelegramText(
-      report.telegram_short_message || report.business_summary_text || "",
+      report.telegram_business_message ||
+        report.telegram_short_message ||
+        report.business_summary_text ||
+        "",
       Number.isFinite(options?.telegramMaxLength)
         ? options.telegramMaxLength
         : 3500,
@@ -2529,8 +2552,8 @@ function buildReport({
     report.telegram_message =
       report.telegram_messages[0] || buildTelegramMessage(report, options);
   } else {
-    report.telegram_messages = report.telegram_short_message
-      ? [report.telegram_short_message]
+    report.telegram_messages = report.telegram_business_message
+      ? [report.telegram_business_message]
       : [];
     report.telegram_message =
       report.telegram_messages[0] || buildTelegramMessage(report, options);

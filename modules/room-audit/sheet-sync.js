@@ -212,6 +212,11 @@ async function syncRoomAuditReportSheet(report, options = {}) {
       };
     }
 
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: settings.spreadsheetId,
+      range: targetRange,
+    });
+
     await sheets.spreadsheets.values.update({
       spreadsheetId: settings.spreadsheetId,
       range: targetRange,
