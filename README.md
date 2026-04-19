@@ -274,7 +274,7 @@ npm run audit:room -- --ids=339,340,341 --send-telegram=true
 
 Quick smoke test with small scope:
 ```powershell
-npm run audit:room -- --ids=339 --limit=1 --use-api=false --send-telegram=false --debug=true
+npm run audit:room -- --ids=339 --limit=1 --use-api=false --send-telegram=false --sync-report-sheet=false --debug=true
 ```
 
 Custom Rule 1 threshold:
@@ -285,11 +285,38 @@ npm run audit:room -- --rule1-hours=12 --send-telegram=false
 ### Supported flags for manual room-audit run
 - `--ids=339,340,341`: run only the specified CDT IDs. If omitted, the tool runs all IDs.
 - `--send-telegram=true|false`: enable or disable Telegram sending.
+- `--telegram-progress=true|false`: send per-CDT progress messages to Telegram. Default is `false`.
+- `--detailed-telegram=true|false`: send the old multi-message detailed Telegram breakdown. Default is `false`.
+- `--sync-report-sheet=true|false`: write the 7-line daily summary into tab `AI Báo cáo` on the report Google Sheet. Default is `true`.
+- `--report-sheet-dry-run=true|false`: resolve the target day column and values for `AI Báo cáo` without writing to the sheet.
+- `--report-sheet-spreadsheet-id=...`: override the report spreadsheet id.
+- `--report-sheet-gid=297377874`: override the report sheet gid.
+- `--report-sheet-header-row=1`: override the header row that contains the day numbers.
+- `--report-sheet-first-data-row=2`: override the first answer row in `AI Báo cáo`.
+- `--report-sheet-start-column=7`: override the first day column. Default `7` = column `G`.
 - `--debug=true|false`: show debug logs.
 - `--use-api=true|false`: enable or disable API enrichment.
 - `--limit=10`: stop after a specific number of audit rows.
 - `--rule1-hours=24`: change the stale threshold for Rule 1.
 - `--openclaw-workspace-dir="C:/path/to/workspace"`: override the OpenClaw copy target for this run only.
+
+### AI Báo cáo daily sync
+Room audit now prepares:
+- Telegram summary in `II.A / II.B` format
+- Daily 7-line answer set for tab `AI Báo cáo` in the reporting Google Sheet
+- Detailed output in `reports/room-audit/latest-room-audit-summary.txt`
+
+Current default report target:
+- Spreadsheet id: `11EyNOVAMn7ei-J8svcMjpvv1B7AashTUDyRB-gUeHho`
+- Sheet gid: `297377874`
+- Header row: `1`
+- Daily columns start at `G`
+- Answer rows: `2` to `8`
+
+How the day column is chosen:
+- If row `1` already has today’s day number, room audit writes into that existing column.
+- If today’s day number is missing, room audit appends the next column to the right and writes the new day header there.
+- On rerun in the same day, room audit clears the target day range first, then writes the new values.
 
 ### Expected output after a successful run
 - Timestamped files:

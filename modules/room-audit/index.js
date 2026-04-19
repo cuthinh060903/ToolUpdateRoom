@@ -2,8 +2,19 @@ const fs = require("fs").promises;
 const path = require("path");
 const { UpdateRoomSari } = require("../../index");
 const { normalizeRoomReport } = require("./normalize-room-report");
-const { buildReport, formatLocalDateTime } = require("./build-report");
-const { sendAuditTelegram } = require("./send-telegram");
+const {
+  buildReport,
+  buildTelegramProgressMessage,
+  formatLocalDateTime,
+} = require("./build-report");
+const {
+  sendAuditTelegram,
+  sendAuditTelegramFailure,
+  sendAuditTelegramProgress,
+  sendAuditTelegramStart,
+} = require("./send-telegram");
+const { syncRoomAuditReportSheet } = require("./sheet-sync");
+const { repairVietnameseText } = require("./text-normalize");
 
 const LOG_FILES = [
   "ggsheet.txt",
@@ -31,6 +42,10 @@ function toBoolean(value, defaultValue = false) {
 function parseNumber(value, fallback = null) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function sleep(ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseArgs(argv = []) {
@@ -66,7 +81,11 @@ function lineContainsAll(line, fragments = []) {
 }
 
 function isMissingDriverGgsheetLog(line = "") {
-  return line.toString().toUpperCase().includes("KHÔNG CÓ LINK DRIVER");
+  const normalizedLine = repairVietnameseText(line).toUpperCase();
+  return (
+    normalizedLine.includes("KHÔNG CÓ LINK DRIVER") ||
+    normalizedLine.includes("KHONG CO LINK DRIVER")
+  );
 }
 
 async function ensureDirectory(dirPath) {
@@ -86,7 +105,11 @@ async function writeReportFiles({
 
   if (summaryPath) {
     writeTasks.push(
-      fs.writeFile(summaryPath, report.business_summary_text || "", "utf8"),
+      fs.writeFile(
+        summaryPath,
+        report.openclaw_summary_text || report.business_summary_text || "",
+        "utf8",
+      ),
     );
   }
 
@@ -135,6 +158,41 @@ async function copyLatestSummaryToOpenClaw(
       error: message,
     };
   }
+}
+
+function appendReportDeliverySummary(summaryText = "", reportSheetSync = null) {
+  const baseText = (summaryText || "").toString().trim();
+  if (!reportSheetSync) {
+    return baseText;
+  }
+
+  const lines = [];
+  if (baseText) {
+    lines.push(baseText, "");
+  }
+  lines.push("[HE_THONG_BAO_CAO]");
+
+  if (reportSheetSync.synced) {
+    lines.push(
+      `- AI Bao cao: da ghi vao ${reportSheetSync.sheetTitle || "AI Bao cao"}!${
+        reportSheetSync.columnLetter || ""
+      } (${reportSheetSync.range || ""}) cho ngay ${reportSheetSync.dayLabel || ""}.`,
+    );
+  } else if (reportSheetSync.dryRun) {
+    lines.push(
+      `- AI Bao cao: dry-run tai cot ${reportSheetSync.columnLetter || "?"} (${reportSheetSync.range || ""}) cho ngay ${reportSheetSync.dayLabel || ""}.`,
+    );
+  } else if (reportSheetSync.skipped) {
+    lines.push(`- AI Bao cao: bo qua dong bo (${reportSheetSync.reason || "unknown"}).`);
+  } else {
+    lines.push(
+      `- AI Bao cao: loi dong bo (${reportSheetSync.reason || "unknown"}). Chi tiet: ${
+        reportSheetSync.error || "khong co"
+      }`,
+    );
+  }
+
+  return lines.join("\n");
 }
 
 async function readLogLines(rootDir, fileName) {
@@ -570,6 +628,24 @@ function buildRunOptions(argv = [], env = process.env) {
         env.npm_config_send_telegram,
       false,
     ),
+    telegramProgress: toBoolean(
+      args["telegram-progress"] ??
+        env.ROOM_AUDIT_TELEGRAM_PROGRESS ??
+        env.npm_config_telegram_progress,
+      false,
+    ),
+    detailedTelegramMessages: toBoolean(
+      args["detailed-telegram"] ??
+        env.ROOM_AUDIT_DETAILED_TELEGRAM ??
+        env.npm_config_detailed_telegram,
+      false,
+    ),
+    telegramProgressMinGapMs: parseNumber(
+      args["telegram-progress-gap-ms"] ??
+        env.ROOM_AUDIT_TELEGRAM_PROGRESS_GAP_MS ??
+        env.npm_config_telegram_progress_gap_ms,
+      2500,
+    ),
     limit: parseNumber(
       args.limit ?? env.ROOM_AUDIT_LIMIT ?? env.npm_config_limit,
       null,
@@ -584,6 +660,46 @@ function buildRunOptions(argv = [], env = process.env) {
     debug: toBoolean(
       args.debug ?? env.ROOM_AUDIT_DEBUG ?? env.npm_config_debug,
       false,
+    ),
+    syncReportSheet: toBoolean(
+      args["sync-report-sheet"] ??
+        env.ROOM_AUDIT_SYNC_REPORT_SHEET ??
+        env.npm_config_sync_report_sheet,
+      true,
+    ),
+    reportSheetDryRun: toBoolean(
+      args["report-sheet-dry-run"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_DRY_RUN ??
+        env.npm_config_report_sheet_dry_run,
+      false,
+    ),
+    reportSheetSpreadsheetId:
+      args["report-sheet-spreadsheet-id"] ??
+      env.ROOM_AUDIT_REPORT_SPREADSHEET_ID ??
+      env.npm_config_report_sheet_spreadsheet_id,
+    reportSheetGid: parseNumber(
+      args["report-sheet-gid"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_GID ??
+        env.npm_config_report_sheet_gid,
+      null,
+    ),
+    reportSheetHeaderRow: parseNumber(
+      args["report-sheet-header-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_HEADER_ROW ??
+        env.npm_config_report_sheet_header_row,
+      1,
+    ),
+    reportSheetFirstDataRow: parseNumber(
+      args["report-sheet-first-data-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_FIRST_DATA_ROW ??
+        env.npm_config_report_sheet_first_data_row,
+      2,
+    ),
+    reportSheetStartColumn: parseNumber(
+      args["report-sheet-start-column"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_START_COLUMN ??
+        env.npm_config_report_sheet_start_column,
+      7,
     ),
     openClawWorkspaceDir:
       args["openclaw-workspace-dir"] ??
@@ -617,90 +733,140 @@ async function runAuditFlow(options = {}) {
   );
 
   await ensureDirectory(outputDir);
+  await sendAuditTelegramStart({
+    enabled: options.sendTelegram,
+    onlyIds: options.onlyIds,
+  });
 
-  for (const config of configs) {
-    let buildingList = [];
+  try {
+    const executionContextByCdt = new Map();
+    let lastTelegramProgressSentAt = 0;
 
-    if (options.useApi) {
-      try {
-        const searchRealnews = await updater.searchRealnewByInvestor(config.id);
-        buildingList = searchRealnews?.content || [];
-      } catch (error) {
-        sourceErrors.push({
-          cdt_id: config.id,
-          source: config.web,
-          step: "searchRealnewByInvestor",
-          message: error?.message || String(error),
+    function getExecutionContextForConfig(config = {}) {
+      const key = String(config.id ?? "");
+      if (!executionContextByCdt.has(key)) {
+        executionContextByCdt.set(key, {
+          cdt_id: Number.isFinite(Number(config.id)) ? Number(config.id) : config.id,
+          cdt_name: config.web || "",
+          configured_sheet_count: Array.isArray(config.list_address)
+            ? config.list_address.length
+            : 0,
+          processed_sheet_count: 0,
+          empty_sheet_count: 0,
+          row_count: 0,
+          source_error_count: 0,
         });
       }
+
+      return executionContextByCdt.get(key);
     }
 
-    for (const sheetGid of config.list_address || []) {
-      let processedRows = [];
+    for (const config of configs) {
+      const executionContext = getExecutionContextForConfig(config);
+      const configRows = [];
+      const configSourceErrors = [];
+      let buildingList = [];
 
-      try {
-        processedRows = (await updater.processCsvData(config, sheetGid)) || [];
-      } catch (error) {
-        sourceErrors.push({
-          cdt_id: config.id,
-          source: config.web,
-          sheet_gid: sheetGid,
-          step: "processCsvData",
-          message: error?.message || String(error),
-        });
-        continue;
+      if (options.useApi) {
+        try {
+          const searchRealnews = await updater.searchRealnewByInvestor(config.id);
+          buildingList = searchRealnews?.content || [];
+        } catch (error) {
+          const sourceError = {
+            cdt_id: config.id,
+            cdt_name: config.web,
+            source: config.web,
+            step: "searchRealnewByInvestor",
+            message: error?.message || String(error),
+          };
+          sourceErrors.push(sourceError);
+          configSourceErrors.push(sourceError);
+          executionContext.source_error_count += 1;
+        }
       }
 
-      debugLog(
-        options.debug,
-        `rows-from-sheet cdt=${config.id} gid=${sheetGid}`,
-        processedRows.length,
-      );
+      for (const sheetGid of config.list_address || []) {
+        let processedRows = [];
 
-      for (const row of processedRows) {
-        let building = null;
-        let room = null;
-        let imageCount = null;
-        let matchContext = {};
-        let apiErrors = {};
-
-        if (options.useApi) {
-          const apiResult = await enrichWithApi(
-            updater,
-            config,
-            row,
-            buildingList,
-            roomCache,
-          );
-          building = apiResult.building;
-          room = apiResult.room;
-          imageCount = apiResult.imageCount;
-          apiErrors = apiResult.apiErrors;
-          matchContext = apiResult.matchContext;
+        try {
+          processedRows = (await updater.processCsvData(config, sheetGid)) || [];
+        } catch (error) {
+          const sourceError = {
+            cdt_id: config.id,
+            cdt_name: config.web,
+            source: config.web,
+            sheet_gid: sheetGid,
+            step: "processCsvData",
+            message: error?.message || String(error),
+          };
+          sourceErrors.push(sourceError);
+          configSourceErrors.push(sourceError);
+          executionContext.source_error_count += 1;
+          continue;
         }
 
-        const logMatches = pickLogMatches(
-          logSources,
-          config,
-          sheetGid,
-          row,
-          room,
-        );
-        const normalizedRow = normalizeRoomReport({
-          config,
-          sheetGid,
-          row,
-          building,
-          room,
-          imageCount,
-          matchContext,
-          logMatches,
-          apiErrors,
-        });
+        executionContext.processed_sheet_count += 1;
+        executionContext.row_count += processedRows.length;
+        if (processedRows.length === 0) {
+          executionContext.empty_sheet_count += 1;
+        }
 
-        rows.push(normalizedRow);
+        debugLog(
+          options.debug,
+          `rows-from-sheet cdt=${config.id} gid=${sheetGid}`,
+          processedRows.length,
+        );
+
+        for (const row of processedRows) {
+          let building = null;
+          let room = null;
+          let imageCount = null;
+          let matchContext = {};
+          let apiErrors = {};
+
+          if (options.useApi) {
+            const apiResult = await enrichWithApi(
+              updater,
+              config,
+              row,
+              buildingList,
+              roomCache,
+            );
+            building = apiResult.building;
+            room = apiResult.room;
+            imageCount = apiResult.imageCount;
+            apiErrors = apiResult.apiErrors;
+            matchContext = apiResult.matchContext;
+          }
+
+          const logMatches = pickLogMatches(
+            logSources,
+            config,
+            sheetGid,
+            row,
+            room,
+          );
+          const normalizedRow = normalizeRoomReport({
+            config,
+            sheetGid,
+            row,
+            building,
+            room,
+            imageCount,
+            matchContext,
+            logMatches,
+            apiErrors,
+          });
+
+          rows.push(normalizedRow);
+          configRows.push(normalizedRow);
+          if (Number.isFinite(options.limit) && rows.length >= options.limit) {
+            debugLog(options.debug, "limit-hit-final-row-count", rows.length);
+            break;
+          }
+        }
+
         if (Number.isFinite(options.limit) && rows.length >= options.limit) {
-          debugLog(options.debug, "limit-hit-final-row-count", rows.length);
           break;
         }
       }
@@ -708,75 +874,127 @@ async function runAuditFlow(options = {}) {
       if (Number.isFinite(options.limit) && rows.length >= options.limit) {
         break;
       }
+
+      if (options.sendTelegram && options.telegramProgress) {
+        const configReport = buildReport({
+          rows: configRows,
+          sourceErrors: configSourceErrors,
+          executionContext: [executionContext],
+          options: {
+            ...options,
+            skipTelegramMessages: true,
+          },
+        });
+        const progressMessage = buildTelegramProgressMessage(configReport);
+
+        if (progressMessage) {
+          const waitMs = Math.max(
+            0,
+            lastTelegramProgressSentAt +
+              Number(options.telegramProgressMinGapMs || 0) -
+              Date.now(),
+          );
+          if (waitMs > 0) {
+            await sleep(waitMs);
+          }
+
+          const progressResult = await sendAuditTelegramProgress(configReport, {
+            enabled: options.sendTelegram,
+            message: progressMessage,
+          });
+          if (progressResult?.sent) {
+            lastTelegramProgressSentAt = Date.now();
+          } else {
+            console.warn(
+              `[room-audit][warning] Telegram progress for CDT ${config.id} failed: ${
+                progressResult?.reason || "unknown error"
+              }`,
+            );
+          }
+        }
+      }
     }
 
-    if (Number.isFinite(options.limit) && rows.length >= options.limit) {
-      break;
+    const report = buildReport({
+      rows,
+      sourceErrors,
+      executionContext: [...executionContextByCdt.values()],
+      options,
+    });
+
+    if (options.debug) {
+      const rowsByCdt = rows.reduce((accumulator, row) => {
+        const key = String(row.cdt_id);
+        accumulator[key] = (accumulator[key] || 0) + 1;
+        return accumulator;
+      }, {});
+      debugLog(options.debug, "final-rows-after-limit", rows.length);
+      debugLog(options.debug, "final-rows-by-cdt", rowsByCdt);
     }
-  }
 
-  const report = buildReport({
-    rows,
-    sourceErrors,
-    options,
-  });
+    const reportSheetSync = await syncRoomAuditReportSheet(report, options);
+    report.report_sheet_sync = reportSheetSync;
+    report.openclaw_summary_text = appendReportDeliverySummary(
+      report.openclaw_summary_text,
+      reportSheetSync,
+    );
+    if (options.debug) {
+      debugLog(options.debug, "report-sheet-sync", reportSheetSync);
+    }
 
-  if (options.debug) {
-    const rowsByCdt = rows.reduce((accumulator, row) => {
-      const key = String(row.cdt_id);
-      accumulator[key] = (accumulator[key] || 0) + 1;
-      return accumulator;
-    }, {});
-    debugLog(options.debug, "final-rows-after-limit", rows.length);
-    debugLog(options.debug, "final-rows-by-cdt", rowsByCdt);
-  }
+    const timestamp = formatLocalDateTime(new Date()).replace(/[: ]/g, "-");
+    const jsonPath = path.join(outputDir, `room-audit-${timestamp}.json`);
+    const txtPath = path.join(outputDir, `room-audit-${timestamp}.txt`);
+    const latestJsonPath = path.join(outputDir, "latest-room-audit.json");
+    const latestTxtPath = path.join(outputDir, "latest-room-audit.txt");
+    const latestSummaryPath = path.join(
+      outputDir,
+      "latest-room-audit-summary.txt",
+    );
 
-  const timestamp = formatLocalDateTime(new Date()).replace(/[: ]/g, "-");
-  const jsonPath = path.join(outputDir, `room-audit-${timestamp}.json`);
-  const txtPath = path.join(outputDir, `room-audit-${timestamp}.txt`);
-  const latestJsonPath = path.join(outputDir, "latest-room-audit.json");
-  const latestTxtPath = path.join(outputDir, "latest-room-audit.txt");
-  const latestSummaryPath = path.join(
-    outputDir,
-    "latest-room-audit-summary.txt",
-  );
-
-  await writeReportFiles({
-    report,
-    jsonPath,
-    txtPath,
-  });
-  await writeReportFiles({
-    report,
-    jsonPath: latestJsonPath,
-    txtPath: latestTxtPath,
-    summaryPath: latestSummaryPath,
-  });
-  const openClawSummaryCopy = await copyLatestSummaryToOpenClaw(
-    latestSummaryPath,
-    options.openClawWorkspaceDir,
-  );
-
-  const telegramResult = await sendAuditTelegram(report, {
-    enabled: options.sendTelegram,
-    message: report.business_summary_text,
-  });
-
-  return {
-    report,
-    output: {
+    await writeReportFiles({
+      report,
       jsonPath,
       txtPath,
-      latestJsonPath,
-      latestTxtPath,
+    });
+    await writeReportFiles({
+      report,
+      jsonPath: latestJsonPath,
+      txtPath: latestTxtPath,
+      summaryPath: latestSummaryPath,
+    });
+    const openClawSummaryCopy = await copyLatestSummaryToOpenClaw(
       latestSummaryPath,
-      openClawWorkspaceDir: openClawSummaryCopy.workspaceDir,
-      openClawSummaryPath: openClawSummaryCopy.targetPath,
-      openClawSummaryCopied: openClawSummaryCopy.copied,
-      openClawSummaryCopyError: openClawSummaryCopy.error,
-    },
-    telegramResult,
-  };
+      options.openClawWorkspaceDir,
+    );
+
+    const telegramResult = await sendAuditTelegram(report, {
+      enabled: options.sendTelegram,
+      message: report.telegram_message,
+    });
+
+    return {
+      report,
+      output: {
+        jsonPath,
+        txtPath,
+        latestJsonPath,
+        latestTxtPath,
+        latestSummaryPath,
+        reportSheetSync,
+        openClawWorkspaceDir: openClawSummaryCopy.workspaceDir,
+        openClawSummaryPath: openClawSummaryCopy.targetPath,
+        openClawSummaryCopied: openClawSummaryCopy.copied,
+        openClawSummaryCopyError: openClawSummaryCopy.error,
+      },
+      telegramResult,
+    };
+  } catch (error) {
+    await sendAuditTelegramFailure(error, {
+      enabled: options.sendTelegram,
+    });
+    throw error;
+  }
 }
 
 if (require.main === module) {
@@ -788,6 +1006,15 @@ if (require.main === module) {
       console.log(`[room-audit] Latest JSON report: ${output.latestJsonPath}`);
       console.log(`[room-audit] Latest text report: ${output.latestTxtPath}`);
       console.log(`[room-audit] Latest summary report: ${output.latestSummaryPath}`);
+      console.log(
+        `[room-audit] Report sheet: ${
+          output.reportSheetSync?.synced
+            ? `${output.reportSheetSync.sheetTitle || "AI Báo cáo"}!${
+                output.reportSheetSync.columnLetter || "?"
+              }`
+            : output.reportSheetSync?.reason || "not synced"
+        }`,
+      );
       console.log(
         `[room-audit] OpenClaw summary copy: ${
           output.openClawSummaryCopied
