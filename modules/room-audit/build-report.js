@@ -795,6 +795,120 @@ function matchesYellowWarningReason(reason = "") {
   return reason === "UPDATED_AT_MISSING" || reason === "UPDATED_AT_INVALID";
 }
 
+const SHEET_ADDRESS_FIELD_REASONS = new Set([
+  "ADDRESS_MISMATCH_LOGGED",
+  "ADDRESS_MISSING",
+]);
+
+const SHEET_ROOM_NAME_FIELD_REASONS = new Set([
+  "ROOM_NOT_MATCHED_POSSIBLE_WRONG_COLUMN",
+  "ROOM_NAME_MISSING",
+  "ROOM_NAME_LOOKS_LIKE_PRICE",
+  "WEB_ROOM_NAME_LOOKS_LIKE_PRICE",
+  "PRICE_UNPARSEABLE",
+  "PRICE_LOOKS_LIKE_ROOM_NAME",
+]);
+
+function matchesSheetAddressFieldReason(reason = "") {
+  return SHEET_ADDRESS_FIELD_REASONS.has(reason);
+}
+
+function matchesSheetRoomNameFieldReason(reason = "") {
+  return SHEET_ROOM_NAME_FIELD_REASONS.has(reason);
+}
+
+function escapeRegExp(value = "") {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function shortenDisplayText(value = "", maxLength = 18) {
+  const normalizedValue = repairVietnameseText(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizedValue || normalizedValue.length <= maxLength) {
+    return normalizedValue;
+  }
+
+  if (maxLength <= 3) {
+    return normalizedValue.slice(0, maxLength);
+  }
+
+  return `${normalizedValue.slice(0, maxLength - 1)}…`;
+}
+
+function simplifyCdtDisplayName(cdtId, cdtName) {
+  const normalizedName = repairVietnameseText(cdtName || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizedName) {
+    return "";
+  }
+
+  const normalizedId = cdtId === null || cdtId === undefined ? "" : String(cdtId).trim();
+  if (!normalizedId) {
+    return normalizedName;
+  }
+
+  const withoutIdPrefix = normalizedName
+    .replace(new RegExp(`^${escapeRegExp(normalizedId)}\\s*`, "i"), "")
+    .trim();
+
+  return withoutIdPrefix || normalizedName;
+}
+
+function buildCompactCdtToken(group = {}, options = {}) {
+  const idText =
+    group?.cdt_id === null || group?.cdt_id === undefined || group?.cdt_id === ""
+      ? ""
+      : String(group.cdt_id).trim();
+  const includeName = Boolean(options?.includeName);
+  const countField = options?.countField || "affected_rows";
+  const includeCount = Boolean(options?.includeCount);
+  const nameText = includeName
+    ? shortenDisplayText(
+        simplifyCdtDisplayName(group?.cdt_id, group?.cdt_name),
+        Number.isFinite(options?.nameMaxLength) ? options.nameMaxLength : 18,
+      )
+    : "";
+
+  let token = idText || shortenDisplayText(group?.cdt_name || "", 18) || "?";
+  if (includeName && nameText && nameText !== token) {
+    token = `${token} ${nameText}`.trim();
+  }
+
+  if (includeCount) {
+    const countValue = Number(group?.[countField] || 0);
+    token = `${token}(${countValue})`;
+  }
+
+  return token;
+}
+
+function buildCompactGroupSummary(groups = [], options = {}) {
+  const normalizedGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
+  if (normalizedGroups.length === 0) {
+    return "Không";
+  }
+
+  const limit = Number.isFinite(options?.limit) ? options.limit : 5;
+  const renderedGroups = normalizedGroups
+    .slice(0, limit)
+    .map((group) => buildCompactCdtToken(group, options))
+    .filter(Boolean);
+
+  if (renderedGroups.length === 0) {
+    return "Không";
+  }
+
+  const remainingCount = normalizedGroups.length - renderedGroups.length;
+  if (remainingCount <= 0) {
+    return renderedGroups.join(", ");
+  }
+
+  const overflowLabel = options?.overflowLabel || "CDT khác";
+  return `${renderedGroups.join(", ")}, +${remainingCount} ${overflowLabel}`;
+}
+
 function collectSuggestedActionKeys({
   reasonEntries = [],
   roomsWithoutImages = 0,
@@ -1470,6 +1584,247 @@ function buildBusinessSummaryLines(report, options = {}) {
 
 function buildBusinessSummaryText(report, options = {}) {
   return buildBusinessSummaryLines(report, options).join("\n");
+}
+
+function buildDailySheetSummary(report, options = {}) {
+  const context = buildTelegramIssueContext(report);
+  const code4Total = (context.code4Groups || []).reduce(
+    (total, group) => total + Number(group.affected_buildings || 0),
+    0,
+  );
+  const code5Total = (context.code5Groups || []).reduce(
+    (total, group) => total + Number(group.affected_rows || 0),
+    0,
+  );
+  const code7Total = (context.code7Groups || []).reduce(
+    (total, group) => total + Number(group.affected_rows || 0),
+    0,
+  );
+  const yellowTotal = (context.yellowGroups || []).reduce(
+    (total, group) => total + Number(group.affected_rows || 0),
+    0,
+  );
+  const code6Count = Array.isArray(context.code6Groups)
+    ? context.code6Groups.length
+    : 0;
+  const sourceErrorTotal = (context.sourceErrorGroups || []).reduce(
+    (total, group) => total + Number(group.source_error_count || 0),
+    0,
+  );
+  const code4AddressKeys = new Set(
+    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : [],
+  );
+  const nonCode4Rows =
+    code4AddressKeys.size === 0
+      ? report.rows
+      : report.rows.filter(
+          (row) =>
+            !code4AddressKeys.has(buildAddressGroupKey(row.cdt_id, row.address)),
+        );
+  const addressFieldGroups = buildDirectIssueGroupsByCdt(
+    nonCode4Rows,
+    (row) =>
+      (row.error_detail || []).some((reason) =>
+        matchesSheetAddressFieldReason(reason),
+      ),
+    matchesSheetAddressFieldReason,
+  );
+  const roomNameFieldGroups = buildDirectIssueGroupsByCdt(
+    nonCode4Rows,
+    (row) =>
+      (row.error_detail || []).some((reason) =>
+        matchesSheetRoomNameFieldReason(reason),
+      ),
+    matchesSheetRoomNameFieldReason,
+  );
+  const compactGroupLimit = Number.isFinite(options?.dailySummaryGroupLimit)
+    ? options.dailySummaryGroupLimit
+    : 5;
+  const hasAnyIssue =
+    sourceErrorTotal > 0 ||
+    code4Total > 0 ||
+    code5Total > 0 ||
+    code6Count > 0 ||
+    code7Total > 0 ||
+    yellowTotal > 0;
+
+  const answers = [
+    report.tool_status?.ran
+      ? `Có | Trống: ${report.total_rows} | Không ảnh: ${report.total_rooms_without_images} | Chưa KT ảnh: ${report.total_rooms_without_images_unknown}`
+      : "Không",
+    hasAnyIssue
+      ? [
+          "Có",
+          sourceErrorTotal > 0 ? `Mã 1:${sourceErrorTotal} lỗi nguồn` : "",
+          code4Total > 0 ? `Mã 4:${code4Total} tòa` : "",
+          code5Total > 0 ? `Mã 5:${code5Total} phòng` : "",
+          code6Count > 0 ? `Mã 6:${code6Count} CDT` : "",
+          code7Total > 0 ? `Mã 7:${code7Total} phòng` : "",
+          yellowTotal > 0 ? `Vàng:${yellowTotal} phòng` : "",
+        ]
+          .filter(Boolean)
+          .join(" | ")
+      : "Không",
+    context.sourceErrorGroups.length > 0
+      ? `Có | ${buildCompactGroupSummary(context.sourceErrorGroups, {
+          limit: compactGroupLimit,
+          overflowLabel: "CDT khác",
+        })}`
+      : "Không",
+    addressFieldGroups.length > 0
+      ? `Có | ${buildCompactGroupSummary(addressFieldGroups, {
+          limit: compactGroupLimit,
+          overflowLabel: "CDT khác",
+        })}`
+      : "Không",
+    roomNameFieldGroups.length > 0
+      ? `Có | ${buildCompactGroupSummary(roomNameFieldGroups, {
+          limit: compactGroupLimit,
+          overflowLabel: "CDT khác",
+        })}`
+      : "Không",
+    context.code6Groups.length > 0
+      ? `Có | ${buildCompactGroupSummary(context.code6Groups, {
+          limit: compactGroupLimit,
+          overflowLabel: "CDT khác",
+        })}`
+      : "Không",
+    context.code4Groups.length > 0
+      ? `Có | ${buildCompactGroupSummary(context.code4Groups, {
+          limit: compactGroupLimit,
+          includeName: true,
+          includeCount: true,
+          countField: "affected_buildings",
+          overflowLabel: "CDT khác",
+        })}`
+      : "Không",
+  ];
+
+  const rowLabels = [
+    "1. Chạy",
+    "2. Lỗi",
+    "3. Link",
+    "4. Địa chỉ",
+    "5. Tên phòng",
+    "6. Hết phòng",
+    "7. Tòa mới",
+  ];
+  const telegramLines = [
+    `[ROOM_AUDIT_DAILY] ${report.generated_at}`,
+    ...answers.map((answer, index) => `${rowLabels[index]}: ${answer}`),
+    "Chi tiết đã lưu trong latest-room-audit-summary.txt",
+  ];
+
+  return {
+    day_label: String(new Date().getDate()),
+    answers,
+    rows: answers.map((answer, index) => ({
+      question_no: index + 1,
+      answer,
+    })),
+    telegram_lines: telegramLines,
+    telegram_text: truncateTelegramText(
+      telegramLines.join("\n"),
+      Number.isFinite(options?.telegramMaxLength)
+        ? options.telegramMaxLength
+        : 3500,
+    ),
+  };
+}
+
+function formatDetailedRoomName(item = {}) {
+  return (
+    repairVietnameseText(item.room_name || "") ||
+    (item.room_id ? String(item.room_id) : "(không có tên phòng)")
+  );
+}
+
+function buildDetailedSummaryText(report, options = {}) {
+  const context = buildTelegramIssueContext(report);
+  const lines = [...buildBusinessSummaryLines(report, options)];
+
+  function pushSection(title, sectionLines = []) {
+    if (!Array.isArray(sectionLines) || sectionLines.length === 0) {
+      return;
+    }
+
+    lines.push("");
+    lines.push(title);
+    lines.push(...sectionLines);
+  }
+
+  pushSection(
+    "MÃ 1 - CDT lỗi link / lỗi nguồn:",
+    (context.sourceErrorGroups || []).length > 0
+      ? context.sourceErrorGroups.map(
+          (group) =>
+            `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.source_error_count} lỗi nguồn | Bước lỗi: ${formatStepSummary(group.steps, 5)}`,
+        )
+      : ["- Không ghi nhận."],
+  );
+
+  pushSection(
+    "MÃ 6 - CDT không có phòng trống:",
+    (context.code6Groups || []).length > 0
+      ? context.code6Groups.map(
+          (group) =>
+            `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | Tổng phòng trống hiện tại = 0`,
+        )
+      : ["- Không ghi nhận."],
+  );
+
+  pushSection(
+    "MÃ 4 - Tòa mới / nghi thiếu tòa trên DB:",
+    (context.code4Groups || []).length > 0
+      ? (context.code4Groups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_buildings} địa chỉ / tòa`,
+          ...(group.addresses || []).map(
+            (address) => `+ ${repairVietnameseText(address)}`,
+          ),
+        ])
+      : ["- Không ghi nhận."],
+  );
+
+  pushSection(
+    "MÃ 5 - Phòng lỗi mapping / cập nhật / tên phòng:",
+    (context.code5DetailGroups || []).length > 0
+      ? (context.code5DetailGroups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng`,
+          ...(group.items || []).map(
+            (item) =>
+              `+ ${repairVietnameseText(item.address || "")} | Phòng: ${formatDetailedRoomName(item)} | Lỗi: ${formatReasonList(item.reasons)}`,
+          ),
+        ])
+      : ["- Không ghi nhận."],
+  );
+
+  pushSection(
+    "MÃ 7 - Phòng lỗi ảnh / metadata:",
+    (context.code7DetailGroups || []).length > 0
+      ? (context.code7DetailGroups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng`,
+          ...(group.items || []).map(
+            (item) =>
+              `+ ${repairVietnameseText(item.address || "")} | Phòng: ${formatDetailedRoomName(item)} | Lỗi: ${formatReasonList(item.reasons)}`,
+          ),
+        ])
+      : ["- Không ghi nhận."],
+  );
+
+  pushSection(
+    "CẢNH BÁO VÀNG - Phòng cần đối chiếu thêm:",
+    (context.yellowDetailGroups || []).length > 0
+      ? (context.yellowDetailGroups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng`,
+          ...(group.items || []).map(
+            (item) =>
+              `+ ${repairVietnameseText(item.address || "")} | Phòng: ${formatDetailedRoomName(item)} | Cảnh báo: ${formatReasonList(item.reasons)}`,
+          ),
+        ])
+      : ["- Không ghi nhận."],
+  );
+
+  return lines.join("\n");
 }
 
 function buildTextReport(report, options = {}) {
@@ -2155,18 +2510,28 @@ function buildReport({
   };
 
   report.business_summary_text = buildBusinessSummaryText(report, options);
+  report.daily_sheet_summary = buildDailySheetSummary(report, options);
+  report.telegram_short_message =
+    report.daily_sheet_summary?.telegram_text || "";
+  report.openclaw_summary_text = buildDetailedSummaryText(report, options);
   report.technical_report = buildTechnicalReport(report, options);
   report.text_report = buildTextReport(report, options);
   if (options.skipTelegramMessages) {
     report.telegram_messages = [];
     report.telegram_message = truncateTelegramText(
-      report.business_summary_text || "",
+      report.telegram_short_message || report.business_summary_text || "",
       Number.isFinite(options?.telegramMaxLength)
         ? options.telegramMaxLength
         : 3500,
     );
-  } else {
+  } else if (options?.detailedTelegramMessages) {
     report.telegram_messages = buildTelegramMessages(report, options);
+    report.telegram_message =
+      report.telegram_messages[0] || buildTelegramMessage(report, options);
+  } else {
+    report.telegram_messages = report.telegram_short_message
+      ? [report.telegram_short_message]
+      : [];
     report.telegram_message =
       report.telegram_messages[0] || buildTelegramMessage(report, options);
   }

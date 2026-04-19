@@ -13,6 +13,7 @@ const {
   sendAuditTelegramProgress,
   sendAuditTelegramStart,
 } = require("./send-telegram");
+const { syncRoomAuditReportSheet } = require("./sheet-sync");
 const { repairVietnameseText } = require("./text-normalize");
 
 const LOG_FILES = [
@@ -104,7 +105,11 @@ async function writeReportFiles({
 
   if (summaryPath) {
     writeTasks.push(
-      fs.writeFile(summaryPath, report.business_summary_text || "", "utf8"),
+      fs.writeFile(
+        summaryPath,
+        report.openclaw_summary_text || report.business_summary_text || "",
+        "utf8",
+      ),
     );
   }
 
@@ -153,6 +158,41 @@ async function copyLatestSummaryToOpenClaw(
       error: message,
     };
   }
+}
+
+function appendReportDeliverySummary(summaryText = "", reportSheetSync = null) {
+  const baseText = (summaryText || "").toString().trim();
+  if (!reportSheetSync) {
+    return baseText;
+  }
+
+  const lines = [];
+  if (baseText) {
+    lines.push(baseText, "");
+  }
+  lines.push("[HE_THONG_BAO_CAO]");
+
+  if (reportSheetSync.synced) {
+    lines.push(
+      `- AI Bao cao: da ghi vao ${reportSheetSync.sheetTitle || "AI Bao cao"}!${
+        reportSheetSync.columnLetter || ""
+      } (${reportSheetSync.range || ""}) cho ngay ${reportSheetSync.dayLabel || ""}.`,
+    );
+  } else if (reportSheetSync.dryRun) {
+    lines.push(
+      `- AI Bao cao: dry-run tai cot ${reportSheetSync.columnLetter || "?"} (${reportSheetSync.range || ""}) cho ngay ${reportSheetSync.dayLabel || ""}.`,
+    );
+  } else if (reportSheetSync.skipped) {
+    lines.push(`- AI Bao cao: bo qua dong bo (${reportSheetSync.reason || "unknown"}).`);
+  } else {
+    lines.push(
+      `- AI Bao cao: loi dong bo (${reportSheetSync.reason || "unknown"}). Chi tiet: ${
+        reportSheetSync.error || "khong co"
+      }`,
+    );
+  }
+
+  return lines.join("\n");
 }
 
 async function readLogLines(rootDir, fileName) {
@@ -592,7 +632,13 @@ function buildRunOptions(argv = [], env = process.env) {
       args["telegram-progress"] ??
         env.ROOM_AUDIT_TELEGRAM_PROGRESS ??
         env.npm_config_telegram_progress,
-      true,
+      false,
+    ),
+    detailedTelegramMessages: toBoolean(
+      args["detailed-telegram"] ??
+        env.ROOM_AUDIT_DETAILED_TELEGRAM ??
+        env.npm_config_detailed_telegram,
+      false,
     ),
     telegramProgressMinGapMs: parseNumber(
       args["telegram-progress-gap-ms"] ??
@@ -614,6 +660,46 @@ function buildRunOptions(argv = [], env = process.env) {
     debug: toBoolean(
       args.debug ?? env.ROOM_AUDIT_DEBUG ?? env.npm_config_debug,
       false,
+    ),
+    syncReportSheet: toBoolean(
+      args["sync-report-sheet"] ??
+        env.ROOM_AUDIT_SYNC_REPORT_SHEET ??
+        env.npm_config_sync_report_sheet,
+      true,
+    ),
+    reportSheetDryRun: toBoolean(
+      args["report-sheet-dry-run"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_DRY_RUN ??
+        env.npm_config_report_sheet_dry_run,
+      false,
+    ),
+    reportSheetSpreadsheetId:
+      args["report-sheet-spreadsheet-id"] ??
+      env.ROOM_AUDIT_REPORT_SPREADSHEET_ID ??
+      env.npm_config_report_sheet_spreadsheet_id,
+    reportSheetGid: parseNumber(
+      args["report-sheet-gid"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_GID ??
+        env.npm_config_report_sheet_gid,
+      null,
+    ),
+    reportSheetHeaderRow: parseNumber(
+      args["report-sheet-header-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_HEADER_ROW ??
+        env.npm_config_report_sheet_header_row,
+      1,
+    ),
+    reportSheetFirstDataRow: parseNumber(
+      args["report-sheet-first-data-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_FIRST_DATA_ROW ??
+        env.npm_config_report_sheet_first_data_row,
+      2,
+    ),
+    reportSheetStartColumn: parseNumber(
+      args["report-sheet-start-column"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_START_COLUMN ??
+        env.npm_config_report_sheet_start_column,
+      7,
     ),
     openClawWorkspaceDir:
       args["openclaw-workspace-dir"] ??
@@ -846,6 +932,16 @@ async function runAuditFlow(options = {}) {
       debugLog(options.debug, "final-rows-by-cdt", rowsByCdt);
     }
 
+    const reportSheetSync = await syncRoomAuditReportSheet(report, options);
+    report.report_sheet_sync = reportSheetSync;
+    report.openclaw_summary_text = appendReportDeliverySummary(
+      report.openclaw_summary_text,
+      reportSheetSync,
+    );
+    if (options.debug) {
+      debugLog(options.debug, "report-sheet-sync", reportSheetSync);
+    }
+
     const timestamp = formatLocalDateTime(new Date()).replace(/[: ]/g, "-");
     const jsonPath = path.join(outputDir, `room-audit-${timestamp}.json`);
     const txtPath = path.join(outputDir, `room-audit-${timestamp}.txt`);
@@ -885,6 +981,7 @@ async function runAuditFlow(options = {}) {
         latestJsonPath,
         latestTxtPath,
         latestSummaryPath,
+        reportSheetSync,
         openClawWorkspaceDir: openClawSummaryCopy.workspaceDir,
         openClawSummaryPath: openClawSummaryCopy.targetPath,
         openClawSummaryCopied: openClawSummaryCopy.copied,
@@ -909,6 +1006,15 @@ if (require.main === module) {
       console.log(`[room-audit] Latest JSON report: ${output.latestJsonPath}`);
       console.log(`[room-audit] Latest text report: ${output.latestTxtPath}`);
       console.log(`[room-audit] Latest summary report: ${output.latestSummaryPath}`);
+      console.log(
+        `[room-audit] Report sheet: ${
+          output.reportSheetSync?.synced
+            ? `${output.reportSheetSync.sheetTitle || "AI Báo cáo"}!${
+                output.reportSheetSync.columnLetter || "?"
+              }`
+            : output.reportSheetSync?.reason || "not synced"
+        }`,
+      );
       console.log(
         `[room-audit] OpenClaw summary copy: ${
           output.openClawSummaryCopied
