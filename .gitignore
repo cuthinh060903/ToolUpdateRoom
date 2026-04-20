@@ -25,6 +25,17 @@ runtimes/
 !package-lock.json
 !sheets_list.json
 ggsheets.json
+downloads/
+logs/
+reports/
+
+# Local notes and backup files
+Bao-cao-tien-do.md
+note 3-4-2026.md
+huongdan 25-8.md
+hướng dẫn.md
+index01.js
+index02.js
 
 # Environment variables
 .env
