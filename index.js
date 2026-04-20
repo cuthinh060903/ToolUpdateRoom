@@ -17,6 +17,14 @@ const { time } = require("console");
 const mammoth = require("mammoth");
 const heicConvert = require("heic-convert");
 
+const DAILY_ROTATION_LOG_FILES = new Set([
+  "nhamoi.txt",
+  "capnhatdriver.txt",
+  "capnhatgia.txt",
+  "capnhattrong.txt",
+]);
+const DEFAULT_LOG_RETENTION_DAYS = 3;
+
 class UpdateRoomSari {
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY;
@@ -69,6 +77,15 @@ class UpdateRoomSari {
     ];
     this.addressMatchProfileCache = new Map();
     this.addressVariantCache = new Map();
+    const configuredLogRetentionDays = Number(
+      process.env.LOG_RETENTION_DAYS || DEFAULT_LOG_RETENTION_DAYS,
+    );
+    this.logRetentionDays =
+      Number.isFinite(configuredLogRetentionDays) &&
+      configuredLogRetentionDays >= 1
+        ? Math.floor(configuredLogRetentionDays)
+        : DEFAULT_LOG_RETENTION_DAYS;
+    this.logRetentionCleanupDateByFile = new Map();
 
     this.minioClient = new Client({
       endPoint: "s3.sari.vn",
@@ -3602,12 +3619,16 @@ class UpdateRoomSari {
                                 );
 
                               for (const roomNumber of roomNumbersArray) {
+                                const normalizedRowPrice =
+                                  this.normalizePriceValue(row["PRICE"], huydev);
                                 const room = this.findMatchedRoom(
                                   searchRooms?.content || [],
                                   roomNumber,
                                   huydev.type,
                                   allocatedRoomIds,
                                   allowDuplicateRoomNames,
+                                  normalizedRowPrice,
+                                  huydev,
                                 );
 
                                 if (room && !matchedRoomIds.has(room.id)) {
@@ -3656,7 +3677,7 @@ class UpdateRoomSari {
                                   const formattedDate = this.getFormattedDate();
                                   const entryAddressContent = `${
                                     huydev.link + idSheetUrl
-                                  }|${item.code}|${row["ADDRESS"]}|${roomNumber}|${formattedDate}`;
+                                  }|${item.code}|${row["ADDRESS"]}|${roomNumber}|${normalizedRowPrice}|${formattedDate}`;
 
                                   const roomCreatedToday =
                                     await this.checkIfEntryExists(
@@ -3699,7 +3720,7 @@ class UpdateRoomSari {
                                         "taophongloi.txt",
                                         `${huydev.link + idSheetUrl}|${item.code}|${
                                           row["ADDRESS"]
-                                        }|${roomNumber}|${
+                                        }|${roomNumber}|${normalizedRowPrice}|${
                                           createErrorSummary
                                             ? "CREATE_ROOM_FAILED"
                                             : "CREATE_ROOM_NULL"
@@ -3738,7 +3759,7 @@ class UpdateRoomSari {
                                       "phongmoi.txt",
                                       `${huydev.link + idSheetUrl}|${item.code}|${
                                         row["ADDRESS"]
-                                      }|${res?.id}|${roomNumber}|${formattedDate}|${
+                                      }|${res?.id}|${roomNumber}|${normalizedRowPrice}|${formattedDate}|${
                                         huydev.web
                                       } Tạo phòng mới thành công\n`,
                                     );
@@ -3756,7 +3777,7 @@ class UpdateRoomSari {
                                         "taophongloi.txt",
                                         `${huydev.link + idSheetUrl}|${item.code}|${
                                           row["ADDRESS"]
-                                        }|${roomNumber}|UPDATE_NEW_ROOM_FAILED|${
+                                        }|${roomNumber}|${normalizedRowPrice}|UPDATE_NEW_ROOM_FAILED|${
                                           formattedDate
                                         }|${huydev.web}|${
                                           updateError?.message || updateError
@@ -3884,9 +3905,13 @@ class UpdateRoomSari {
                         );
 
                         const formattedDate = this.getFormattedDate();
+                        const normalizedRowPrice = this.normalizePriceValue(
+                          row["PRICE"],
+                          huydev,
+                        );
                         const entryHollowContent = `${huydev.link + idSheetUrl}|${
                           row["ADDRESS"]
-                        }|${row["ROOMS"]}|${formattedDate}`;
+                        }|${row["ROOMS"]}|${normalizedRowPrice}|${formattedDate}`;
 
                         const arrayHollowAddress =
                           await this.checkIfEntryExists(
@@ -3900,7 +3925,7 @@ class UpdateRoomSari {
                             "khongcodulieu.txt",
                             `${huydev.link + idSheetUrl}|${row["ADDRESS"]}|${
                               row["ROOMS"]
-                            }|${formattedDate}|${huydev.web}\n`,
+                            }|${normalizedRowPrice}|${formattedDate}|${huydev.web}\n`,
                           );
 
                           const errorMsg = `⚠️ KHÔNG CÓ DỮ LIỆU TÒA NHÀ TRÊN WEB: ${row["ADDRESS"]} (Bảng hàng: ${huydev.web})`;
@@ -4288,7 +4313,107 @@ class UpdateRoomSari {
     ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
   }
 
+  getIsoDayKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  normalizeLogFileName(fileName) {
+    return path.basename(fileName || "").toLowerCase();
+  }
+
+  extractIsoDayKeyFromLogLine(line = "") {
+    const match = line.match(
+      /(\d{1,2})\/(\d{1,2})\/(\d{4})-(\d{1,2}):(\d{2})(?::(\d{2}))?/,
+    );
+    if (!match) {
+      return null;
+    }
+
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const hours = Number(match[4]);
+    const minutes = Number(match[5]);
+    const seconds = Number(match[6] || 0);
+    const parsedDate = new Date(year, month - 1, day, hours, minutes, seconds);
+    const isValid =
+      parsedDate.getFullYear() === year &&
+      parsedDate.getMonth() === month - 1 &&
+      parsedDate.getDate() === day &&
+      parsedDate.getHours() === hours &&
+      parsedDate.getMinutes() === minutes &&
+      parsedDate.getSeconds() === seconds;
+
+    if (!isValid) {
+      return null;
+    }
+
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+      2,
+      "0",
+    )}`;
+  }
+
+  async enforceLogRetentionByDay(fileName) {
+    const normalizedFileName = this.normalizeLogFileName(fileName);
+    if (!DAILY_ROTATION_LOG_FILES.has(normalizedFileName)) {
+      return;
+    }
+
+    const todayKey = this.getIsoDayKey();
+    if (this.logRetentionCleanupDateByFile.get(normalizedFileName) === todayKey) {
+      return;
+    }
+
+    try {
+      const fileContent = await fs.readFile(fileName, "utf8");
+      const lines = fileContent.split(/\r?\n/);
+      const lineInfos = lines.map((line) => ({
+        line,
+        dayKey: this.extractIsoDayKeyFromLogLine(line),
+      }));
+      const dayKeys = [
+        ...new Set(lineInfos.map((lineInfo) => lineInfo.dayKey).filter(Boolean)),
+      ].sort();
+
+      if (dayKeys.length > this.logRetentionDays) {
+        const keptDayKeys = new Set(dayKeys.slice(-this.logRetentionDays));
+        const filteredLines = lineInfos
+          .filter((lineInfo) => {
+            if (!lineInfo.line || !lineInfo.line.trim()) {
+              return false;
+            }
+            if (!lineInfo.dayKey) {
+              return true;
+            }
+            return keptDayKeys.has(lineInfo.dayKey);
+          })
+          .map((lineInfo) => lineInfo.line);
+        const nextContent =
+          filteredLines.length > 0 ? `${filteredLines.join("\n")}\n` : "";
+
+        if (nextContent !== fileContent) {
+          await fs.writeFile(fileName, nextContent, "utf8");
+        }
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        console.warn(
+          `[log-retention] Skip cleanup for ${fileName}: ${
+            error?.message || error
+          }`,
+        );
+      }
+    } finally {
+      this.logRetentionCleanupDateByFile.set(normalizedFileName, todayKey);
+    }
+  }
+
   async appendToFile(fileName, content) {
+    await this.enforceLogRetentionByDay(fileName);
     await fs.appendFile(fileName, content);
   }
 
@@ -4848,7 +4973,21 @@ class UpdateRoomSari {
     type = "chdv",
     allocatedRoomIds = new Set(),
     allowDuplicateRoomNames = false,
+    targetPrice = 0,
+    priceConfig = {},
   ) {
+    const pickMatchedRoom = (candidates = []) => {
+      if (candidates.length === 0) {
+        return null;
+      }
+      if (!allowDuplicateRoomNames) {
+        return candidates[0];
+      }
+      return (
+        candidates.find((room) => !allocatedRoomIds.has(room.id)) || null
+      );
+    };
+
     const matchingRooms = rooms.filter((room) =>
       this.roomNamesMatch(room.name, roomNumber, type),
     );
@@ -4856,11 +4995,34 @@ class UpdateRoomSari {
       return null;
     }
 
-    if (!allowDuplicateRoomNames) {
-      return matchingRooms[0];
+    if (matchingRooms.length > 1) {
+      const normalizedTargetPrice = this.normalizePriceValue(
+        targetPrice,
+        priceConfig,
+      );
+      // Có nhiều phòng trùng tên trong cùng tòa:
+      // bắt buộc dùng GIÁ để định danh, không fallback "lấy phòng đầu tiên".
+      if (normalizedTargetPrice <= 0) {
+        return null;
+      }
+
+      const priceMatchedRooms = matchingRooms.filter((room) => {
+        const normalizedRoomPrice = this.normalizePriceValue(
+          room?.price,
+          priceConfig,
+        );
+        return normalizedRoomPrice === normalizedTargetPrice;
+      });
+      const matchedByPrice = pickMatchedRoom(priceMatchedRooms);
+      if (matchedByPrice) {
+        return matchedByPrice;
+      }
+
+      // Trùng tên nhưng không khớp giá => coi là phòng khác, tránh cập nhật nhầm.
+      return null;
     }
 
-    return matchingRooms.find((room) => !allocatedRoomIds.has(room.id)) || null;
+    return pickMatchedRoom(matchingRooms);
   }
 
   handleNormalizedPriceRange(rangeStr, config = {}) {

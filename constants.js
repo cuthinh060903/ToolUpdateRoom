@@ -4319,9 +4319,9 @@
   {
     id: 144,
     type: "hybrid",
-    allow_duplicate_room_names: true,
+    allow_duplicate_room_names: true, // Tên tòa trùng giá
     address_column: [2],
-    room_column: [1],
+    room_column: [3],
     building_code_column: [null],
     price_column: [4],
     name: "144 a.lợi",
