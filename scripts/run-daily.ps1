@@ -3,6 +3,7 @@ param(
   [string]$EntryScript = "index.js",
   [string]$LogDir = "logs",
   [string]$LogPrefix = "daily-run",
+  [int]$LogRetentionDays = 3,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$ScriptArgs
 )
@@ -26,6 +27,29 @@ if ([string]::IsNullOrWhiteSpace($LogPrefix)) {
 $invalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
 foreach ($invalidChar in $invalidFileNameChars) {
   $LogPrefix = $LogPrefix.Replace($invalidChar, "-")
+}
+
+if (
+  -not $PSBoundParameters.ContainsKey("LogRetentionDays") -and
+  -not [string]::IsNullOrWhiteSpace($env.LOG_RETENTION_DAYS)
+) {
+  $envRetentionDays = 0
+  if ([int]::TryParse($env.LOG_RETENTION_DAYS, [ref]$envRetentionDays)) {
+    $LogRetentionDays = $envRetentionDays
+  }
+}
+
+$safeLogRetentionDays = if ($LogRetentionDays -ge 1) { $LogRetentionDays } else { 1 }
+$cutoffDate = (Get-Date).Date.AddDays(-($safeLogRetentionDays - 1))
+$logPattern = "*.log"
+$logsToDelete = Get-ChildItem -Path $resolvedLogDir -Filter $logPattern -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.LastWriteTime.Date -lt $cutoffDate }
+
+if ($logsToDelete) {
+  foreach ($oldLog in $logsToDelete) {
+    Remove-Item -LiteralPath $oldLog.FullName -Force
+  }
+  Write-Host "[scheduler] Removed old logs: $($logsToDelete.Count) (retention=$safeLogRetentionDays day(s), pattern=$logPattern)"
 }
 
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
