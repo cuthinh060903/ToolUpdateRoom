@@ -51,10 +51,6 @@ function buildCombinedOptions(argv = [], env = process.env) {
         args["room-audit-use-api"] ?? env.ROOM_AUDIT_USE_API,
         true,
       ),
-      sendTelegram: toBoolean(
-        args["room-audit-send-telegram"] ?? env.ROOM_AUDIT_SEND_TELEGRAM,
-        true,
-      ),
       limit: parseNumber(
         args["room-audit-limit"] ?? env.ROOM_AUDIT_LIMIT,
         null,
@@ -88,13 +84,6 @@ async function runAllDailyFlow(options = {}) {
     const auditResult = await runAuditFlow(options.roomAudit || {});
     console.log(
       `[combined] Room audit completed. Total rows: ${auditResult.report.total_rows}`,
-    );
-    console.log(
-      `[combined] Room audit Telegram: ${
-        auditResult.telegramResult.sent
-          ? "sent"
-          : auditResult.telegramResult.reason
-      }`,
     );
     return auditResult;
   }

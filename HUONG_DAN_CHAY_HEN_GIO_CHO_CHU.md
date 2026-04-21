@@ -84,12 +84,12 @@ npm run run:room-audit
 - Tên task: `ToolUpdateRoom-RoomAudit-Daily`
 - File chạy: `modules/room-audit/index.js`
 - Log ghi vào: `logs\room-audit-run-YYYY-MM-DD_HH-mm-ss.log`
-- Khi chạy preset này sẽ gửi Telegram room audit với tham số `--send-telegram=true`
+- Preset này mặc định không gửi Telegram và không sync sheet (chỉ tạo report local)
 
 Nếu muốn chạy tay trực tiếp, không qua wrapper hẹn giờ:
 
 ```powershell
-npm run audit:room -- --send-telegram=true
+npm run audit:room
 ```
 
 ## 3. Nhóm chạy cả 2 chức năng cùng lúc

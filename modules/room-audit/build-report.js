@@ -54,7 +54,7 @@ function getDefaultBusinessOverridePath() {
     "../..",
     "reports",
     "room-audit",
-    "business-conclusion-overrides.json",
+    "business-conclusion-overrides.json"
   );
 }
 
@@ -85,7 +85,7 @@ function loadBusinessConclusionOverrides(options = {}) {
             item.cdt_id !== undefined &&
             item.address &&
             item.room_name &&
-            item.business_conclusion,
+            item.business_conclusion
         )
         .map((item) => [
           buildRowBusinessKey(item),
@@ -95,7 +95,7 @@ function loadBusinessConclusionOverrides(options = {}) {
             business_conclusion_source:
               item.business_conclusion_source || "override",
           },
-        ]),
+        ])
     );
   } catch (error) {
     return new Map();
@@ -159,7 +159,7 @@ function summarizeRule(rows, fieldName) {
       summary[status] = (summary[status] || 0) + 1;
       return summary;
     },
-    { PASS: 0, FAIL: 0, SKIP: 0, PENDING: 0 },
+    { PASS: 0, FAIL: 0, SKIP: 0, PENDING: 0 }
   );
 }
 
@@ -223,7 +223,7 @@ function buildCdtWarningGroups(rows = []) {
   });
 
   return [...groups.values()].sort(
-    (a, b) => b.total_fail_rows - a.total_fail_rows || a.cdt_id - b.cdt_id,
+    (a, b) => b.total_fail_rows - a.total_fail_rows || a.cdt_id - b.cdt_id
   );
 }
 
@@ -325,7 +325,7 @@ function buildSummaryByCdt(rows = [], sourceErrors = []) {
     const group = ensureCdtSummaryGroup(
       groups,
       sourceError?.cdt_id,
-      sourceError?.cdt_name || sourceError?.source,
+      sourceError?.cdt_name || sourceError?.source
     );
     group.source_error_count += 1;
     group._sourceSteps.push(sourceError?.step || "UNKNOWN");
@@ -343,7 +343,7 @@ function buildSummaryByCdt(rows = [], sourceErrors = []) {
         (item) => ({
           step: item.value,
           count: item.count,
-        }),
+        })
       );
 
       return {
@@ -383,7 +383,7 @@ function buildSummaryByCdt(rows = [], sourceErrors = []) {
 
 function buildUpdateErrorsByCdt(summaryByCdt = []) {
   return summaryByCdt.filter(
-    (item) => item.failed_update_rows > 0 || item.source_error_count > 0,
+    (item) => item.failed_update_rows > 0 || item.source_error_count > 0
   );
 }
 
@@ -419,7 +419,7 @@ function buildExecutionSummaryByCdt(executionContext = [], sourceErrors = []) {
   sourceErrors.forEach((sourceError) => {
     const group = ensureGroup(
       sourceError?.cdt_id,
-      sourceError?.cdt_name || sourceError?.source,
+      sourceError?.cdt_name || sourceError?.source
     );
     if (!executionContext.length) {
       group.source_error_count += 1;
@@ -442,10 +442,10 @@ function buildCode6Candidates(executionSummaryByCdt = []) {
         item.configured_sheet_count > 0 &&
         item.processed_sheet_count > 0 &&
         item.row_count === 0 &&
-        item.source_error_count === 0,
+        item.source_error_count === 0
     )
     .sort((a, b) =>
-      String(a.cdt_id ?? "").localeCompare(String(b.cdt_id ?? "")),
+      String(a.cdt_id ?? "").localeCompare(String(b.cdt_id ?? ""))
     );
 }
 
@@ -560,7 +560,11 @@ function buildCdtLines(report, options = {}) {
     "CDT cảnh báo:",
     ...groups.map(
       (group) =>
-        `- CDT ${group.cdt_id} (${repairVietnameseText(group.cdt_name)}): ${group.total_fail_rows} phòng | R1:${group.rule1_fail} R2:${group.rule2_fail} R3:${group.rule3_fail} R4:${group.rule4_fail}`,
+        `- CDT ${group.cdt_id} (${repairVietnameseText(group.cdt_name)}): ${
+          group.total_fail_rows
+        } phòng | R1:${group.rule1_fail} R2:${group.rule2_fail} R3:${
+          group.rule3_fail
+        } R4:${group.rule4_fail}`
     ),
   ];
 }
@@ -664,7 +668,7 @@ function formatReasonList(reasonList = []) {
   return reasonList
     .map(
       (item) =>
-        `${formatBusinessReasonLabel(item.reason || item.step)} (${item.count})`,
+        `${formatBusinessReasonLabel(item.reason || item.step)} (${item.count})`
     )
     .join(", ");
 }
@@ -844,7 +848,8 @@ function simplifyCdtDisplayName(cdtId, cdtName) {
     return "";
   }
 
-  const normalizedId = cdtId === null || cdtId === undefined ? "" : String(cdtId).trim();
+  const normalizedId =
+    cdtId === null || cdtId === undefined ? "" : String(cdtId).trim();
   if (!normalizedId) {
     return normalizedName;
   }
@@ -858,7 +863,9 @@ function simplifyCdtDisplayName(cdtId, cdtName) {
 
 function buildCompactCdtToken(group = {}, options = {}) {
   const idText =
-    group?.cdt_id === null || group?.cdt_id === undefined || group?.cdt_id === ""
+    group?.cdt_id === null ||
+    group?.cdt_id === undefined ||
+    group?.cdt_id === ""
       ? ""
       : String(group.cdt_id).trim();
   const includeName = Boolean(options?.includeName);
@@ -867,7 +874,7 @@ function buildCompactCdtToken(group = {}, options = {}) {
   const nameText = includeName
     ? shortenDisplayText(
         simplifyCdtDisplayName(group?.cdt_id, group?.cdt_name),
-        Number.isFinite(options?.nameMaxLength) ? options.nameMaxLength : 18,
+        Number.isFinite(options?.nameMaxLength) ? options.nameMaxLength : 18
       )
     : "";
 
@@ -894,8 +901,8 @@ function buildCompactGroupSummary(groups = [], options = {}) {
   const limit = includeAll
     ? normalizedGroups.length
     : Number.isFinite(options?.limit)
-      ? options.limit
-      : 5;
+    ? options.limit
+    : 5;
   const renderedGroups = normalizedGroups
     .slice(0, limit)
     .map((group) => buildCompactCdtToken(group, options))
@@ -906,11 +913,7 @@ function buildCompactGroupSummary(groups = [], options = {}) {
   }
 
   const remainingCount = normalizedGroups.length - renderedGroups.length;
-  if (
-    remainingCount <= 0 ||
-    includeAll ||
-    options?.includeOverflow === false
-  ) {
+  if (remainingCount <= 0 || includeAll || options?.includeOverflow === false) {
     return renderedGroups.join(", ");
   }
 
@@ -959,7 +962,7 @@ function collectSuggestedActionKeys({
   }
 
   return BUSINESS_SUGGESTED_ACTIONS.filter((item) =>
-    actionKeys.includes(item.key),
+    actionKeys.includes(item.key)
   );
 }
 
@@ -974,7 +977,7 @@ function buildSuggestedActionLines(report) {
   const lines = ["Hướng xử lý đề xuất:"];
   if (suggestions.length === 0) {
     lines.push(
-      "- Không có hướng xử lý đề xuất vì không ghi nhận lỗi business nổi bật.",
+      "- Không có hướng xử lý đề xuất vì không ghi nhận lỗi business nổi bật."
     );
     return lines;
   }
@@ -1009,7 +1012,7 @@ function buildIssueGroupsByCdt(rows = [], matcher = () => false) {
 
   rows.forEach((row) => {
     const matchedReasons = (row.error_detail || []).filter((reason) =>
-      matcher(reason, row),
+      matcher(reason, row)
     );
     if (matchedReasons.length === 0) {
       return;
@@ -1054,7 +1057,7 @@ function buildCode4Detection(rows = []) {
 
   rows.forEach((row) => {
     const reasons = (row.error_detail || []).filter((reason) =>
-      matchesAddressBuildingReason(reason),
+      matchesAddressBuildingReason(reason)
     );
     if (reasons.length === 0) {
       return;
@@ -1158,14 +1161,14 @@ function buildSummaryDrivenIssueGroups(
   summaryGroups = [],
   rows = [],
   countSelector = () => 0,
-  reasonMatcher = () => false,
+  reasonMatcher = () => false
 ) {
   const reasonGroups = buildIssueGroupsByCdt(rows, reasonMatcher);
   const reasonMap = new Map(
     reasonGroups.map((group) => [
       buildCdtGroupKey(group.cdt_id, group.cdt_name),
       group,
-    ]),
+    ])
   );
 
   return summaryGroups
@@ -1176,7 +1179,7 @@ function buildSummaryDrivenIssueGroups(
       }
 
       const reasonGroup = reasonMap.get(
-        buildCdtGroupKey(group.cdt_id, group.cdt_name),
+        buildCdtGroupKey(group.cdt_id, group.cdt_name)
       );
       return {
         cdt_id: group.cdt_id,
@@ -1198,7 +1201,7 @@ function buildSummaryDrivenIssueGroups(
 function buildDirectIssueGroupsByCdt(
   rows = [],
   rowPredicate = () => false,
-  reasonMatcher = () => false,
+  reasonMatcher = () => false
 ) {
   const groups = new Map();
 
@@ -1220,9 +1223,7 @@ function buildDirectIssueGroupsByCdt(
     const group = groups.get(key);
     group.affected_rows += 1;
     group.reasons.push(
-      ...(row.error_detail || []).filter((reason) =>
-        reasonMatcher(reason, row),
-      ),
+      ...(row.error_detail || []).filter((reason) => reasonMatcher(reason, row))
     );
   });
 
@@ -1377,20 +1378,22 @@ function buildNeedConditionLine(report, code6Groups = []) {
   return "II.A.1: Điều kiện cần = CHƯA GHI NHẬN. Chưa có dữ liệu lần chạy để kết luận.";
 }
 
-function buildCode1Line(sourceErrorGroups = []) {
+function buildCode3Line(sourceErrorGroups = []) {
   if (!Array.isArray(sourceErrorGroups) || sourceErrorGroups.length === 0) {
-    return "II.A.3: Mã 1 = KHÔNG GHI NHẬN. Lần chạy này không có source_error hoặc link bảng hàng bị fail.";
+    return "II.A.3: Mã 3 = KHÔNG GHI NHẬN. Lần chạy này không có source_error hoặc link bảng hàng bị fail.";
   }
 
   const summaryText = sourceErrorGroups
     .slice(0, 4)
     .map(
       (group) =>
-        `${formatCdtRef(group.cdt_id, group.cdt_name)} x${group.source_error_count} lỗi nguồn [${formatStepSummary(group.steps)}]`,
+        `${formatCdtRef(group.cdt_id, group.cdt_name)} x${
+          group.source_error_count
+        } lỗi nguồn [${formatStepSummary(group.steps)}]`
     )
     .join(" | ");
 
-  return `II.A.3: Mã 1 = ${summaryText}.`;
+  return `II.A.3: Mã 3 = ${summaryText}.`;
 }
 
 function buildCode6Line(code6Groups = [], executionSummaryByCdt = []) {
@@ -1418,7 +1421,7 @@ function buildPriorityActionText(report) {
 
   if (Array.isArray(report.code4_groups) && report.code4_groups.length > 0) {
     actions.push(
-      "Liệt kê CDT/địa chỉ tòa mới, đối chiếu DB và tạo hoặc bổ sung building/alias trên hệ thống",
+      "Liệt kê CDT/địa chỉ tòa mới, đối chiếu DB và tạo hoặc bổ sung building/alias trên hệ thống"
     );
   }
 
@@ -1447,11 +1450,12 @@ function buildConclusionLine({
   code5Groups = [],
   code6Groups = [],
   code7Groups = [],
+  imageGroups = [],
   yellowGroups = [],
 } = {}) {
   const activeCodes = [];
   if (sourceErrorGroups.length > 0) {
-    activeCodes.push("Mã 1");
+    activeCodes.push("Mã 3");
   }
   if (code4Groups.length > 0) {
     activeCodes.push("Mã 4");
@@ -1481,101 +1485,150 @@ function buildBusinessSummaryLines(report, options = {}) {
     ? options.openClawCodeGroupLimit
     : 5;
   const warningCdtCount = report.summary_by_cdt.filter(
-    (group) => group.status === "WARNING" || group.status === "ERROR",
+    (group) => group.status === "WARNING" || group.status === "ERROR"
   ).length;
   const sourceErrorGroups = buildSourceErrorGroups(report.source_errors);
   const code6Groups =
     Array.isArray(report.code6_candidates) && report.code6_candidates.length > 0
       ? report.code6_candidates
       : buildCode6Candidates(report.execution_summary_by_cdt);
-  const code4Groups =
+  const code7Groups =
     Array.isArray(report.code4_groups) && report.code4_groups.length > 0
       ? report.code4_groups
       : [];
   const code4AddressKeys = new Set(
-    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : [],
+    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : []
   );
   const nonCode4Rows =
     code4AddressKeys.size === 0
       ? report.rows
       : report.rows.filter(
           (row) =>
-            !code4AddressKeys.has(
-              buildAddressGroupKey(row.cdt_id, row.address),
-            ),
+            !code4AddressKeys.has(buildAddressGroupKey(row.cdt_id, row.address))
         );
+  const code4Groups = buildDirectIssueGroupsByCdt(
+    nonCode4Rows,
+    (row) =>
+      (row.error_detail || []).some((reason) =>
+        matchesSheetAddressFieldReason(reason)
+      ),
+    matchesSheetAddressFieldReason
+  ).slice(0, codeGroupLimit);
   const code5Groups = buildDirectIssueGroupsByCdt(
     nonCode4Rows,
-    hasAnyUpdateFail,
-    matchesCode5Reason,
+    (row) =>
+      (row.error_detail || []).some((reason) =>
+        matchesSheetRoomNameFieldReason(reason)
+      ),
+    matchesSheetRoomNameFieldReason
   ).slice(0, codeGroupLimit);
-  const code7Groups = buildDirectIssueGroupsByCdt(
+  const imageGroups = buildDirectIssueGroupsByCdt(
     report.rows,
     (row) =>
       (row.error_detail || []).some((reason) => matchesCode7Reason(reason)),
-    matchesCode7Reason,
+    matchesCode7Reason
   ).slice(0, codeGroupLimit);
   const yellowGroups = buildDirectIssueGroupsByCdt(
     report.rows,
     (row) =>
       (row.error_detail || []).some((reason) =>
-        matchesYellowWarningReason(reason),
+        matchesYellowWarningReason(reason)
       ),
-    matchesYellowWarningReason,
+    matchesYellowWarningReason
   ).slice(0, codeGroupLimit);
   const lines = [
     `[OPENCLAW_STAGE_2] ${report.generated_at}`,
     buildNeedConditionLine(report, code6Groups),
     `II.A.2: Tổng hợp nhanh = ${warningCdtCount} CDT có cảnh báo; ${report.tool_status.total_failed_update_rows} phòng không cập nhật được; ${report.total_rooms_without_images} phòng xác nhận không có ảnh; ${report.total_rooms_without_images_unknown} phòng chưa kiểm tra được ảnh.`,
-    buildCode1Line(sourceErrorGroups),
+    buildCode3Line(sourceErrorGroups),
     buildCode6Line(code6Groups, report.execution_summary_by_cdt),
   ];
 
   let sectionIndex = 1;
-  if (code4Groups.length > 0) {
-    code4Groups.slice(0, codeGroupLimit).forEach((group) => {
+  code4Groups.forEach((group) => {
+    lines.push(
+      `II.B.${sectionIndex}: ${formatCdtRef(
+        group.cdt_id,
+        group.cdt_name
+      )} = Mã 4 x${
+        group.affected_rows
+      } phòng. Dấu hiệu: ${formatRawReasonSummary(group.reasons)}.`
+    );
+    sectionIndex += 1;
+  });
+
+  code5Groups.forEach((group) => {
+    lines.push(
+      `II.B.${sectionIndex}: ${formatCdtRef(
+        group.cdt_id,
+        group.cdt_name
+      )} = Mã 5 x${
+        group.affected_rows
+      } phòng. Dấu hiệu: ${formatRawReasonSummary(group.reasons)}.`
+    );
+    sectionIndex += 1;
+  });
+
+  if (code7Groups.length > 0) {
+    code7Groups.slice(0, codeGroupLimit).forEach((group) => {
       lines.push(
-        `II.B.${sectionIndex}: ${formatCdtRef(group.cdt_id, group.cdt_name)} = Mã 4 x${group.affected_buildings} tòa. Dấu hiệu: ${formatRawReasonSummary(group.reasons, 3)}. Địa chỉ nghi là tòa mới: ${formatAddressSummary(group.addresses)}.`,
+        `II.B.${sectionIndex}: ${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} = Mã 7 x${
+          group.affected_buildings
+        } tòa. Dấu hiệu: ${formatRawReasonSummary(
+          group.reasons,
+          3
+        )}. Địa chỉ nghi là tòa mới: ${formatAddressSummary(group.addresses)}.`
       );
       sectionIndex += 1;
     });
   } else {
     lines.push(
-      `II.B.${sectionIndex}: Mã 4 = KHÔNG GHI NHẬN. Chưa phát hiện CDT nào có tòa mới / thiếu tòa mới trên DB trong lần chạy này.`,
+      `II.B.${sectionIndex}: Mã 7 = KHÔNG GHI NHẬN. Chưa phát hiện CDT nào có tòa mới / thiếu tòa mới trên DB trong lần chạy này.`
     );
     sectionIndex += 1;
   }
 
-  code5Groups.forEach((group) => {
+  imageGroups.forEach((group) => {
     lines.push(
-      `II.B.${sectionIndex}: ${formatCdtRef(group.cdt_id, group.cdt_name)} = Mã 5 x${group.affected_rows} phòng. Dấu hiệu: ${formatRawReasonSummary(group.reasons)}.`,
-    );
-    sectionIndex += 1;
-  });
-
-  code7Groups.forEach((group) => {
-    lines.push(
-      `II.B.${sectionIndex}: ${formatCdtRef(group.cdt_id, group.cdt_name)} = Mã 7 x${group.affected_rows} phòng. Dấu hiệu: ${formatRawReasonSummary(group.reasons)}.`,
+      `II.B.${sectionIndex}: ${formatCdtRef(
+        group.cdt_id,
+        group.cdt_name
+      )} = LỖI ẢNH/METADATA x${
+        group.affected_rows
+      } phòng. Dấu hiệu: ${formatRawReasonSummary(group.reasons)}.`
     );
     sectionIndex += 1;
   });
 
   yellowGroups.forEach((group) => {
     lines.push(
-      `II.B.${sectionIndex}: ${formatCdtRef(group.cdt_id, group.cdt_name)} = CẢNH BÁO VÀNG x${group.affected_rows} phòng. Dấu hiệu: ${formatRawReasonSummary(group.reasons, 3)}; cần đối chiếu thêm API/log.`,
+      `II.B.${sectionIndex}: ${formatCdtRef(
+        group.cdt_id,
+        group.cdt_name
+      )} = CẢNH BÁO VÀNG x${
+        group.affected_rows
+      } phòng. Dấu hiệu: ${formatRawReasonSummary(
+        group.reasons,
+        3
+      )}; cần đối chiếu thêm API/log.`
     );
     sectionIndex += 1;
   });
 
   if (sectionIndex === 1) {
     lines.push(
-      "II.B.1: Không ghi nhận CDT nào có Mã 5, Mã 7 hoặc cảnh báo vàng trong lần chạy này.",
+      "II.B.1: Không ghi nhận CDT nào có Mã 4, Mã 5, Mã 7 hoặc cảnh báo vàng trong lần chạy này."
     );
     sectionIndex += 1;
   }
 
   lines.push(
-    `II.B.${sectionIndex}: Hướng xử lý ưu tiên = ${buildPriorityActionText(report)}.`,
+    `II.B.${sectionIndex}: Hướng xử lý ưu tiên = ${buildPriorityActionText(
+      report
+    )}.`
   );
   lines.push(
     buildConclusionLine({
@@ -1584,8 +1637,9 @@ function buildBusinessSummaryLines(report, options = {}) {
       code5Groups,
       code6Groups,
       code7Groups,
+      imageGroups,
       yellowGroups,
-    }),
+    })
   );
 
   return lines;
@@ -1598,53 +1652,57 @@ function buildBusinessSummaryText(report, options = {}) {
 function buildDailySheetSummary(report, options = {}) {
   const context = buildTelegramIssueContext(report);
   const code4Total = (context.code4Groups || []).reduce(
-    (total, group) => total + Number(group.affected_buildings || 0),
-    0,
+    (total, group) => total + Number(group.affected_rows || 0),
+    0
   );
   const code5Total = (context.code5Groups || []).reduce(
     (total, group) => total + Number(group.affected_rows || 0),
-    0,
+    0
   );
   const code7Total = (context.code7Groups || []).reduce(
+    (total, group) => total + Number(group.affected_buildings || 0),
+    0
+  );
+  const imageIssueTotal = (context.imageGroups || []).reduce(
     (total, group) => total + Number(group.affected_rows || 0),
-    0,
+    0
   );
   const yellowTotal = (context.yellowGroups || []).reduce(
     (total, group) => total + Number(group.affected_rows || 0),
-    0,
+    0
   );
   const code6Count = Array.isArray(context.code6Groups)
     ? context.code6Groups.length
     : 0;
   const sourceErrorTotal = (context.sourceErrorGroups || []).reduce(
     (total, group) => total + Number(group.source_error_count || 0),
-    0,
+    0
   );
   const code4AddressKeys = new Set(
-    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : [],
+    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : []
   );
   const nonCode4Rows =
     code4AddressKeys.size === 0
       ? report.rows
       : report.rows.filter(
           (row) =>
-            !code4AddressKeys.has(buildAddressGroupKey(row.cdt_id, row.address)),
+            !code4AddressKeys.has(buildAddressGroupKey(row.cdt_id, row.address))
         );
   const addressFieldGroups = buildDirectIssueGroupsByCdt(
     nonCode4Rows,
     (row) =>
       (row.error_detail || []).some((reason) =>
-        matchesSheetAddressFieldReason(reason),
+        matchesSheetAddressFieldReason(reason)
       ),
-    matchesSheetAddressFieldReason,
+    matchesSheetAddressFieldReason
   );
   const roomNameFieldGroups = buildDirectIssueGroupsByCdt(
     nonCode4Rows,
     (row) =>
       (row.error_detail || []).some((reason) =>
-        matchesSheetRoomNameFieldReason(reason),
+        matchesSheetRoomNameFieldReason(reason)
       ),
-    matchesSheetRoomNameFieldReason,
+    matchesSheetRoomNameFieldReason
   );
   const compactGroupLimit = Number.isFinite(options?.dailySummaryGroupLimit)
     ? options.dailySummaryGroupLimit
@@ -1664,11 +1722,12 @@ function buildDailySheetSummary(report, options = {}) {
     hasAnyIssue
       ? [
           "Có",
-          sourceErrorTotal > 0 ? `Mã 1:${sourceErrorTotal} lỗi nguồn` : "",
-          code4Total > 0 ? `Mã 4:${code4Total} tòa` : "",
+          sourceErrorTotal > 0 ? `Mã 3:${sourceErrorTotal} lỗi nguồn` : "",
+          code4Total > 0 ? `Mã 4:${code4Total} phòng` : "",
           code5Total > 0 ? `Mã 5:${code5Total} phòng` : "",
           code6Count > 0 ? `Mã 6:${code6Count} CDT` : "",
-          code7Total > 0 ? `Mã 7:${code7Total} phòng` : "",
+          code7Total > 0 ? `Mã 7:${code7Total} tòa` : "",
+          imageIssueTotal > 0 ? `Ảnh/metadata:${imageIssueTotal} phòng` : "",
           yellowTotal > 0 ? `Vàng:${yellowTotal} phòng` : "",
         ]
           .filter(Boolean)
@@ -1706,9 +1765,6 @@ function buildDailySheetSummary(report, options = {}) {
       ? `Có | ${buildCompactGroupSummary(context.code4Groups, {
           limit: compactGroupLimit,
           includeOverflow: false,
-          includeName: true,
-          includeCount: true,
-          countField: "affected_buildings",
           overflowLabel: "CDT khác",
         })}`
       : "Không",
@@ -1741,7 +1797,7 @@ function buildDailySheetSummary(report, options = {}) {
       telegramLines.join("\n"),
       Number.isFinite(options?.telegramMaxLength)
         ? options.telegramMaxLength
-        : 3500,
+        : 3500
     ),
   };
 }
@@ -1768,13 +1824,15 @@ function buildDetailedSummaryText(report, options = {}) {
   }
 
   pushSection(
-    "MÃ 1 - CDT lỗi link / lỗi nguồn:",
+    "MÃ 3 - CDT lỗi link / lỗi nguồn:",
     (context.sourceErrorGroups || []).length > 0
       ? context.sourceErrorGroups.map(
           (group) =>
-            `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.source_error_count} lỗi nguồn | Bước lỗi: ${formatStepSummary(group.steps, 5)}`,
+            `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+              group.source_error_count
+            } lỗi nguồn | Bước lỗi: ${formatStepSummary(group.steps, 5)}`
         )
-      : ["- Không ghi nhận."],
+      : ["- Không ghi nhận."]
   );
 
   pushSection(
@@ -1782,60 +1840,102 @@ function buildDetailedSummaryText(report, options = {}) {
     (context.code6Groups || []).length > 0
       ? context.code6Groups.map(
           (group) =>
-            `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | Tổng phòng trống hiện tại = 0`,
+            `- ${formatCdtRef(
+              group.cdt_id,
+              group.cdt_name
+            )} | Tổng phòng trống hiện tại = 0`
         )
-      : ["- Không ghi nhận."],
+      : ["- Không ghi nhận."]
   );
 
   pushSection(
-    "MÃ 4 - Tòa mới / nghi thiếu tòa trên DB:",
-    (context.code4Groups || []).length > 0
-      ? (context.code4Groups || []).flatMap((group) => [
-          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_buildings} địa chỉ / tòa`,
-          ...(group.addresses || []).map(
-            (address) => `+ ${repairVietnameseText(address)}`,
+    "MÃ 4 - Phòng lỗi trường địa chỉ:",
+    (context.code4DetailGroups || []).length > 0
+      ? (context.code4DetailGroups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+            group.affected_rows
+          } phòng`,
+          ...(group.items || []).map(
+            (item) =>
+              `+ ${repairVietnameseText(
+                item.address || ""
+              )} | Phòng: ${formatDetailedRoomName(
+                item
+              )} | Lỗi: ${formatReasonList(item.reasons)}`
           ),
         ])
-      : ["- Không ghi nhận."],
+      : ["- Không ghi nhận."]
   );
 
   pushSection(
-    "MÃ 5 - Phòng lỗi mapping / cập nhật / tên phòng:",
+    "MÃ 7 - Tòa mới / nghi thiếu tòa trên DB:",
+    (context.code7Groups || []).length > 0
+      ? (context.code7Groups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+            group.affected_buildings
+          } địa chỉ / tòa`,
+          ...(group.addresses || []).map(
+            (address) => `+ ${repairVietnameseText(address)}`
+          ),
+        ])
+      : ["- Không ghi nhận."]
+  );
+
+  pushSection(
+    "MÃ 5 - Phòng lỗi trường tên phòng / mapping:",
     (context.code5DetailGroups || []).length > 0
       ? (context.code5DetailGroups || []).flatMap((group) => [
-          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng`,
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+            group.affected_rows
+          } phòng`,
           ...(group.items || []).map(
             (item) =>
-              `+ ${repairVietnameseText(item.address || "")} | Phòng: ${formatDetailedRoomName(item)} | Lỗi: ${formatReasonList(item.reasons)}`,
+              `+ ${repairVietnameseText(
+                item.address || ""
+              )} | Phòng: ${formatDetailedRoomName(
+                item
+              )} | Lỗi: ${formatReasonList(item.reasons)}`
           ),
         ])
-      : ["- Không ghi nhận."],
+      : ["- Không ghi nhận."]
   );
 
   pushSection(
-    "MÃ 7 - Phòng lỗi ảnh / metadata:",
-    (context.code7DetailGroups || []).length > 0
-      ? (context.code7DetailGroups || []).flatMap((group) => [
-          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng`,
+    "LỖI ẢNH/METADATA:",
+    (context.imageDetailGroups || []).length > 0
+      ? (context.imageDetailGroups || []).flatMap((group) => [
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+            group.affected_rows
+          } phòng`,
           ...(group.items || []).map(
             (item) =>
-              `+ ${repairVietnameseText(item.address || "")} | Phòng: ${formatDetailedRoomName(item)} | Lỗi: ${formatReasonList(item.reasons)}`,
+              `+ ${repairVietnameseText(
+                item.address || ""
+              )} | Phòng: ${formatDetailedRoomName(
+                item
+              )} | Lỗi: ${formatReasonList(item.reasons)}`
           ),
         ])
-      : ["- Không ghi nhận."],
+      : ["- Không ghi nhận."]
   );
 
   pushSection(
     "CẢNH BÁO VÀNG - Phòng cần đối chiếu thêm:",
     (context.yellowDetailGroups || []).length > 0
       ? (context.yellowDetailGroups || []).flatMap((group) => [
-          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng`,
+          `- ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+            group.affected_rows
+          } phòng`,
           ...(group.items || []).map(
             (item) =>
-              `+ ${repairVietnameseText(item.address || "")} | Phòng: ${formatDetailedRoomName(item)} | Cảnh báo: ${formatReasonList(item.reasons)}`,
+              `+ ${repairVietnameseText(
+                item.address || ""
+              )} | Phòng: ${formatDetailedRoomName(
+                item
+              )} | Cảnh báo: ${formatReasonList(item.reasons)}`
           ),
         ])
-      : ["- Không ghi nhận."],
+      : ["- Không ghi nhận."]
   );
 
   return lines.join("\n");
@@ -1850,7 +1950,7 @@ function buildTextReport(report, options = {}) {
   }
 
   return [businessSummaryText, "", "Chi tiết kỹ thuật:", technicalReport].join(
-    "\n",
+    "\n"
   );
 }
 
@@ -1887,7 +1987,7 @@ function buildTelegramChunkMessages(header = "", lines = [], options = {}) {
   const messages = [];
   const maxLineLength = Math.max(
     200,
-    maxLength - (normalizedHeader ? normalizedHeader.length + 1 : 0),
+    maxLength - (normalizedHeader ? normalizedHeader.length + 1 : 0)
   );
   let currentMessage = normalizedHeader;
 
@@ -1940,7 +2040,7 @@ function formatTelegramReasonSummary(reasonEntries = [], limit = 3) {
 function buildDetailedIssueGroupsByCdt(
   rows = [],
   rowPredicate = () => false,
-  reasonMatcher = () => false,
+  reasonMatcher = () => false
 ) {
   const groups = new Map();
 
@@ -1950,7 +2050,7 @@ function buildDetailedIssueGroupsByCdt(
     }
 
     const matchedReasons = (row.error_detail || []).filter((reason) =>
-      reasonMatcher(reason, row),
+      reasonMatcher(reason, row)
     );
     if (matchedReasons.length === 0) {
       return;
@@ -1999,14 +2099,14 @@ function buildDetailedIssueGroupsByCdt(
         }))
         .sort((a, b) => {
           const addressDiff = normalizeKeyText(a.address).localeCompare(
-            normalizeKeyText(b.address),
+            normalizeKeyText(b.address)
           );
           if (addressDiff !== 0) {
             return addressDiff;
           }
 
           return normalizeKeyText(a.room_name || a.room_id).localeCompare(
-            normalizeKeyText(b.room_name || b.room_id),
+            normalizeKeyText(b.room_name || b.room_id)
           );
         }),
     }))
@@ -2025,40 +2125,49 @@ function buildTelegramIssueContext(report) {
     Array.isArray(report.code6_candidates) && report.code6_candidates.length > 0
       ? report.code6_candidates
       : buildCode6Candidates(report.execution_summary_by_cdt);
-  const code4Groups =
+  const code7Groups =
     Array.isArray(report.code4_groups) && report.code4_groups.length > 0
       ? report.code4_groups
       : [];
   const code4AddressKeys = new Set(
-    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : [],
+    Array.isArray(report.code4_address_keys) ? report.code4_address_keys : []
   );
   const nonCode4Rows =
     code4AddressKeys.size === 0
       ? report.rows
       : report.rows.filter(
           (row) =>
-            !code4AddressKeys.has(
-              buildAddressGroupKey(row.cdt_id, row.address),
-            ),
+            !code4AddressKeys.has(buildAddressGroupKey(row.cdt_id, row.address))
         );
+  const code4Groups = buildDirectIssueGroupsByCdt(
+    nonCode4Rows,
+    (row) =>
+      (row.error_detail || []).some((reason) =>
+        matchesSheetAddressFieldReason(reason)
+      ),
+    matchesSheetAddressFieldReason
+  );
   const code5Groups = buildDirectIssueGroupsByCdt(
     nonCode4Rows,
-    hasAnyUpdateFail,
-    matchesCode5Reason,
+    (row) =>
+      (row.error_detail || []).some((reason) =>
+        matchesSheetRoomNameFieldReason(reason)
+      ),
+    matchesSheetRoomNameFieldReason
   );
-  const code7Groups = buildDirectIssueGroupsByCdt(
+  const imageGroups = buildDirectIssueGroupsByCdt(
     report.rows,
     (row) =>
       (row.error_detail || []).some((reason) => matchesCode7Reason(reason)),
-    matchesCode7Reason,
+    matchesCode7Reason
   );
   const yellowGroups = buildDirectIssueGroupsByCdt(
     report.rows,
     (row) =>
       (row.error_detail || []).some((reason) =>
-        matchesYellowWarningReason(reason),
+        matchesYellowWarningReason(reason)
       ),
-    matchesYellowWarningReason,
+    matchesYellowWarningReason
   );
 
   return {
@@ -2067,57 +2176,85 @@ function buildTelegramIssueContext(report) {
     code4Groups,
     code5Groups,
     code7Groups,
+    imageGroups,
     yellowGroups,
+    code4DetailGroups: buildDetailedIssueGroupsByCdt(
+      nonCode4Rows,
+      (row) =>
+        (row.error_detail || []).some((reason) =>
+          matchesSheetAddressFieldReason(reason)
+        ),
+      matchesSheetAddressFieldReason
+    ),
     code5DetailGroups: buildDetailedIssueGroupsByCdt(
       nonCode4Rows,
-      hasAnyUpdateFail,
-      matchesCode5Reason,
+      (row) =>
+        (row.error_detail || []).some((reason) =>
+          matchesSheetRoomNameFieldReason(reason)
+        ),
+      matchesSheetRoomNameFieldReason
     ),
     code7DetailGroups: buildDetailedIssueGroupsByCdt(
       report.rows,
       (row) =>
+        code4AddressKeys.has(buildAddressGroupKey(row.cdt_id, row.address)),
+      () => true
+    ),
+    imageDetailGroups: buildDetailedIssueGroupsByCdt(
+      report.rows,
+      (row) =>
         (row.error_detail || []).some((reason) => matchesCode7Reason(reason)),
-      matchesCode7Reason,
+      matchesCode7Reason
     ),
     yellowDetailGroups: buildDetailedIssueGroupsByCdt(
       report.rows,
       (row) =>
         (row.error_detail || []).some((reason) =>
-          matchesYellowWarningReason(reason),
+          matchesYellowWarningReason(reason)
         ),
-      matchesYellowWarningReason,
+      matchesYellowWarningReason
     ),
   };
 }
 
 function buildTelegramOverviewLines(report, context = {}) {
   const code4Total = (context.code4Groups || []).reduce(
-    (total, group) => total + Number(group.affected_buildings || 0),
-    0,
+    (total, group) => total + Number(group.affected_rows || 0),
+    0
   );
   const code5Total = (context.code5Groups || []).reduce(
     (total, group) => total + Number(group.affected_rows || 0),
-    0,
+    0
   );
   const code7Total = (context.code7Groups || []).reduce(
+    (total, group) => total + Number(group.affected_buildings || 0),
+    0
+  );
+  const imageIssueTotal = (context.imageGroups || []).reduce(
     (total, group) => total + Number(group.affected_rows || 0),
-    0,
+    0
   );
   const yellowTotal = (context.yellowGroups || []).reduce(
     (total, group) => total + Number(group.affected_rows || 0),
-    0,
+    0
   );
   const lines = [
     `[OPENCLAW_STAGE_2] ${report.generated_at}`,
     buildNeedConditionLine(report, context.code6Groups || []),
     `II.A.2: Tổng hợp nhanh = ${
       report.summary_by_cdt.filter(
-        (group) => group.status === "WARNING" || group.status === "ERROR",
+        (group) => group.status === "WARNING" || group.status === "ERROR"
       ).length
-    } CDT có cảnh báo; ${report.tool_status.total_failed_update_rows} phòng không cập nhật được; ${report.total_rooms_without_images} phòng xác nhận không có ảnh; ${report.total_rooms_without_images_unknown} phòng chưa kiểm tra được ảnh.`,
-    buildCode1Line(context.sourceErrorGroups || []),
+    } CDT có cảnh báo; ${
+      report.tool_status.total_failed_update_rows
+    } phòng không cập nhật được; ${
+      report.total_rooms_without_images
+    } phòng xác nhận không có ảnh; ${
+      report.total_rooms_without_images_unknown
+    } phòng chưa kiểm tra được ảnh.`,
+    buildCode3Line(context.sourceErrorGroups || []),
     buildCode6Line(context.code6Groups || [], report.execution_summary_by_cdt),
-    `Chi tiết Telegram: Mã 4 = ${code4Total} địa chỉ/tòa; Mã 5 = ${code5Total} phòng; Mã 7 = ${code7Total} phòng; Cảnh báo vàng = ${yellowTotal} phòng.`,
+    `Chi tiết Telegram: Mã 4 = ${code4Total} phòng; Mã 5 = ${code5Total} phòng; Mã 7 = ${code7Total} địa chỉ/tòa; Lỗi ảnh/metadata = ${imageIssueTotal} phòng; Cảnh báo vàng = ${yellowTotal} phòng.`,
     "Các tin nhắn tiếp theo sẽ tách chi tiết theo CDT, địa chỉ và phòng lỗi để tránh giới hạn ký tự.",
   ];
 
@@ -2147,17 +2284,17 @@ function buildTelegramCdtSummaryMessages(context = {}, options = {}) {
 
   (context.sourceErrorGroups || []).forEach((group) => {
     ensureSummary(group.cdt_id, group.cdt_name).code1 += Number(
-      group.source_error_count || 0,
+      group.source_error_count || 0
     );
   });
   (context.code4Groups || []).forEach((group) => {
     ensureSummary(group.cdt_id, group.cdt_name).code4 += Number(
-      group.affected_buildings || 0,
+      group.affected_buildings || 0
     );
   });
   (context.code5Groups || []).forEach((group) => {
     ensureSummary(group.cdt_id, group.cdt_name).code5 += Number(
-      group.affected_rows || 0,
+      group.affected_rows || 0
     );
   });
   (context.code6Groups || []).forEach((group) => {
@@ -2165,12 +2302,12 @@ function buildTelegramCdtSummaryMessages(context = {}, options = {}) {
   });
   (context.code7Groups || []).forEach((group) => {
     ensureSummary(group.cdt_id, group.cdt_name).code7 += Number(
-      group.affected_rows || 0,
+      group.affected_buildings || 0
     );
   });
   (context.yellowGroups || []).forEach((group) => {
     ensureSummary(group.cdt_id, group.cdt_name).yellow += Number(
-      group.affected_rows || 0,
+      group.affected_rows || 0
     );
   });
 
@@ -2182,7 +2319,7 @@ function buildTelegramCdtSummaryMessages(context = {}, options = {}) {
         item.code5 > 0 ||
         item.code6 ||
         item.code7 > 0 ||
-        item.yellow > 0,
+        item.yellow > 0
     )
     .sort((a, b) => {
       const scoreA =
@@ -2197,13 +2334,15 @@ function buildTelegramCdtSummaryMessages(context = {}, options = {}) {
     })
     .map((item) => {
       const parts = [];
-      if (item.code1 > 0) parts.push(`Mã 1:${item.code1} lỗi nguồn`);
-      if (item.code4 > 0) parts.push(`Mã 4:${item.code4} tòa`);
+      if (item.code1 > 0) parts.push(`Mã 3:${item.code1} lỗi nguồn`);
+      if (item.code4 > 0) parts.push(`Mã 4:${item.code4} phòng`);
       if (item.code5 > 0) parts.push(`Mã 5:${item.code5} phòng`);
       if (item.code6) parts.push("Mã 6:x0 phòng");
-      if (item.code7 > 0) parts.push(`Mã 7:${item.code7} phòng`);
+      if (item.code7 > 0) parts.push(`Mã 7:${item.code7} tòa`);
       if (item.yellow > 0) parts.push(`Vàng:${item.yellow} phòng`);
-      return `- ${formatCdtRef(item.cdt_id, item.cdt_name)} | ${parts.join(" | ")}`;
+      return `- ${formatCdtRef(item.cdt_id, item.cdt_name)} | ${parts.join(
+        " | "
+      )}`;
     });
 
   if (lines.length === 0) {
@@ -2219,21 +2358,23 @@ function formatTelegramRoomLine(item = {}, issueLabel = "Lỗi") {
   const roomName =
     repairVietnameseText(item.room_name || "") ||
     (item.room_id ? String(item.room_id) : "(không có tên phòng)");
-  return `+ ${address} | Phòng: ${roomName} | ${issueLabel}: ${formatTelegramReasonSummary(item.reasons)}`;
+  return `+ ${address} | Phòng: ${roomName} | ${issueLabel}: ${formatTelegramReasonSummary(
+    item.reasons
+  )}`;
 }
 
 function buildTelegramGroupedDetailMessages(
   groups = [],
   headerBuilder = () => "",
   lineBuilder = () => "",
-  options = {},
+  options = {}
 ) {
   return groups.flatMap((group) =>
     buildTelegramChunkMessages(
       headerBuilder(group),
       (group.items || []).map((item) => lineBuilder(item, group)),
-      options,
-    ),
+      options
+    )
   );
 }
 
@@ -2254,34 +2395,38 @@ function buildTelegramProgressMessage(report, options = {}) {
 
   const cdtKey = buildCdtGroupKey(summaryEntry.cdt_id, summaryEntry.cdt_name);
   const sourceErrorGroup = (context.sourceErrorGroups || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
   const code4Group = (context.code4Groups || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
   const code5Group = (context.code5Groups || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
   const code6Group = (context.code6Groups || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
   const code7Group = (context.code7Groups || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
+  );
+  const imageGroup = (context.imageGroups || []).find(
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
   const yellowGroup = (context.yellowGroups || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
   const executionEntry = (report.execution_summary_by_cdt || []).find(
-    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey,
+    (group) => buildCdtGroupKey(group.cdt_id, group.cdt_name) === cdtKey
   );
 
   const hasIssue = Boolean(
     sourceErrorGroup ||
-    code4Group ||
-    code5Group ||
-    code6Group ||
-    code7Group ||
-    yellowGroup,
+      code4Group ||
+      code5Group ||
+      code6Group ||
+      code7Group ||
+      imageGroup ||
+      yellowGroup
   );
   if (!hasIssue && !options.includeClean) {
     return "";
@@ -2289,10 +2434,10 @@ function buildTelegramProgressMessage(report, options = {}) {
 
   const issueParts = [];
   if (sourceErrorGroup) {
-    issueParts.push(`Mã 1:${sourceErrorGroup.source_error_count} lỗi nguồn`);
+    issueParts.push(`Mã 3:${sourceErrorGroup.source_error_count} lỗi nguồn`);
   }
   if (code4Group) {
-    issueParts.push(`Mã 4:${code4Group.affected_buildings} tòa`);
+    issueParts.push(`Mã 4:${code4Group.affected_rows} phòng`);
   }
   if (code5Group) {
     issueParts.push(`Mã 5:${code5Group.affected_rows} phòng`);
@@ -2301,7 +2446,10 @@ function buildTelegramProgressMessage(report, options = {}) {
     issueParts.push("Mã 6:x0 phòng");
   }
   if (code7Group) {
-    issueParts.push(`Mã 7:${code7Group.affected_rows} phòng`);
+    issueParts.push(`Mã 7:${code7Group.affected_buildings} tòa`);
+  }
+  if (imageGroup) {
+    issueParts.push(`Ảnh/metadata:${imageGroup.affected_rows} phòng`);
   }
   if (yellowGroup) {
     issueParts.push(`Vàng:${yellowGroup.affected_rows} phòng`);
@@ -2313,22 +2461,26 @@ function buildTelegramProgressMessage(report, options = {}) {
     sourceErrorGroup.steps.length > 0
       ? `Bước lỗi: ${formatStepSummary(sourceErrorGroup.steps, 3)}.`
       : code5Group &&
-          Array.isArray(code5Group.reasons) &&
-          code5Group.reasons.length > 0
-        ? `Dấu hiệu chính: ${formatRawReasonSummary(code5Group.reasons, 3)}.`
-        : code7Group &&
-            Array.isArray(code7Group.reasons) &&
-            code7Group.reasons.length > 0
-          ? `Dấu hiệu chính: ${formatRawReasonSummary(code7Group.reasons, 3)}.`
-          : code4Group &&
-              Array.isArray(code4Group.reasons) &&
-              code4Group.reasons.length > 0
-            ? `Dấu hiệu chính: ${formatRawReasonSummary(code4Group.reasons, 3)}.`
-            : yellowGroup &&
-                Array.isArray(yellowGroup.reasons) &&
-                yellowGroup.reasons.length > 0
-              ? `Dấu hiệu chính: ${formatRawReasonSummary(yellowGroup.reasons, 3)}.`
-              : "";
+        Array.isArray(code5Group.reasons) &&
+        code5Group.reasons.length > 0
+      ? `Dấu hiệu chính: ${formatRawReasonSummary(code5Group.reasons, 3)}.`
+      : code7Group &&
+        Array.isArray(code7Group.reasons) &&
+        code7Group.reasons.length > 0
+      ? `Dấu hiệu chính: ${formatRawReasonSummary(code7Group.reasons, 3)}.`
+      : imageGroup &&
+        Array.isArray(imageGroup.reasons) &&
+        imageGroup.reasons.length > 0
+      ? `Dấu hiệu ảnh/metadata: ${formatRawReasonSummary(imageGroup.reasons, 3)}.`
+      : code4Group &&
+        Array.isArray(code4Group.reasons) &&
+        code4Group.reasons.length > 0
+      ? `Dấu hiệu chính: ${formatRawReasonSummary(code4Group.reasons, 3)}.`
+      : yellowGroup &&
+        Array.isArray(yellowGroup.reasons) &&
+        yellowGroup.reasons.length > 0
+      ? `Dấu hiệu chính: ${formatRawReasonSummary(yellowGroup.reasons, 3)}.`
+      : "";
 
   const processedSheetText = executionEntry
     ? `${executionEntry.processed_sheet_count}/${executionEntry.configured_sheet_count} sheet`
@@ -2337,7 +2489,10 @@ function buildTelegramProgressMessage(report, options = {}) {
     ? "Xác minh CDT hết phòng thật hay tool quét thiếu dữ liệu."
     : `${buildPriorityActionText(report)}.`;
   const lines = [
-    `[ROOM_AUDIT_PROGRESS] ${formatCdtRef(summaryEntry.cdt_id, summaryEntry.cdt_name)}`,
+    `[ROOM_AUDIT_PROGRESS] ${formatCdtRef(
+      summaryEntry.cdt_id,
+      summaryEntry.cdt_name
+    )}`,
     `Đã quét xong ${processedSheetText} | Tổng phòng trống: ${report.total_rows}.`,
     hasIssue
       ? `Kết quả: ${issueParts.join(" | ")}.`
@@ -2362,20 +2517,26 @@ function buildTelegramMessages(report, options = {}) {
   const messages = [];
 
   messages.push(
-    ...buildTelegramChunkMessages("", buildTelegramOverviewLines(report, context), options),
+    ...buildTelegramChunkMessages(
+      "",
+      buildTelegramOverviewLines(report, context),
+      options
+    )
   );
   messages.push(...buildTelegramCdtSummaryMessages(context, options));
 
   if ((context.sourceErrorGroups || []).length > 0) {
     messages.push(
       ...buildTelegramChunkMessages(
-        "MÃ 1 - DANH SÁCH CDT LỖI NGUỒN:",
+        "MÃ 3 - DANH SÁCH CDT LỖI NGUỒN:",
         context.sourceErrorGroups.map(
           (group) =>
-            `+ ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.source_error_count} lỗi nguồn | Bước: ${formatStepSummary(group.steps, 3)}`,
+            `+ ${formatCdtRef(group.cdt_id, group.cdt_name)} | ${
+              group.source_error_count
+            } lỗi nguồn | Bước: ${formatStepSummary(group.steps, 3)}`
         ),
-        options,
-      ),
+        options
+      )
     );
   }
 
@@ -2385,53 +2546,94 @@ function buildTelegramMessages(report, options = {}) {
         "MÃ 6 - CDT KHÔNG CÓ PHÒNG TRỐNG:",
         context.code6Groups.map(
           (group) =>
-            `+ ${formatCdtRef(group.cdt_id, group.cdt_name)} | Tổng phòng trống hiện tại = 0 | Cần xác minh hết phòng thật hay tool quét thiếu`,
+            `+ ${formatCdtRef(
+              group.cdt_id,
+              group.cdt_name
+            )} | Tổng phòng trống hiện tại = 0 | Cần xác minh hết phòng thật hay tool quét thiếu`
         ),
-        options,
-      ),
+        options
+      )
     );
   }
 
   messages.push(
-    ...(context.code4Groups || []).flatMap((group) =>
+    ...(context.code7Groups || []).flatMap((group) =>
       buildTelegramChunkMessages(
-        `MÃ 4 - DANH SÁCH ĐỊA CHỈ NGHI THIẾU TÒA (${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_buildings} địa chỉ):`,
+        `MÃ 7 - DANH SÁCH ĐỊA CHỈ NGHI THIẾU TÒA (${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} | ${group.affected_buildings} địa chỉ):`,
         (group.addresses || []).map(
-          (address) => `+ ${repairVietnameseText(address)}`,
+          (address) => `+ ${repairVietnameseText(address)}`
         ),
-        options,
-      ),
-    ),
+        options
+      )
+    )
+  );
+
+  messages.push(
+    ...buildTelegramGroupedDetailMessages(
+      context.code4DetailGroups || [],
+      (group) =>
+        `MÃ 4 - DANH SÁCH PHÒNG LỖI TRƯỜNG ĐỊA CHỈ (${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} | ${group.affected_rows} phòng):`,
+      (item) => formatTelegramRoomLine(item, "Lỗi địa chỉ"),
+      options
+    )
   );
 
   messages.push(
     ...buildTelegramGroupedDetailMessages(
       context.code5DetailGroups || [],
       (group) =>
-        `MÃ 5 - DANH SÁCH PHÒNG LỖI CẬP NHẬT/MAPPING (${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng):`,
+        `MÃ 5 - DANH SÁCH PHÒNG LỖI TÊN PHÒNG/MAPPING (${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} | ${group.affected_rows} phòng):`,
       (item) => formatTelegramRoomLine(item, "Lỗi"),
-      options,
-    ),
+      options
+    )
   );
 
   messages.push(
     ...buildTelegramGroupedDetailMessages(
       context.code7DetailGroups || [],
       (group) =>
-        `MÃ 7 - DANH SÁCH PHÒNG LỖI ẢNH/METADATA (${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng):`,
+        `MÃ 7 - DANH SÁCH ĐỊA CHỈ NGHI THIẾU TÒA (${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} | ${group.affected_rows} phòng/cụm địa chỉ):`,
+      (item) => formatTelegramRoomLine(item, "Tòa mới/thiếu tòa"),
+      options
+    )
+  );
+
+  messages.push(
+    ...buildTelegramGroupedDetailMessages(
+      context.imageDetailGroups || [],
+      (group) =>
+        `LỖI ẢNH/METADATA - DANH SÁCH PHÒNG (${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} | ${group.affected_rows} phòng):`,
       (item) => formatTelegramRoomLine(item, "Lỗi ảnh"),
-      options,
-    ),
+      options
+    )
   );
 
   messages.push(
     ...buildTelegramGroupedDetailMessages(
       context.yellowDetailGroups || [],
       (group) =>
-        `CẢNH BÁO VÀNG - DANH SÁCH PHÒNG CẦN ĐỐI CHIẾU (${formatCdtRef(group.cdt_id, group.cdt_name)} | ${group.affected_rows} phòng):`,
+        `CẢNH BÁO VÀNG - DANH SÁCH PHÒNG CẦN ĐỐI CHIẾU (${formatCdtRef(
+          group.cdt_id,
+          group.cdt_name
+        )} | ${group.affected_rows} phòng):`,
       (item) => formatTelegramRoomLine(item, "Cảnh báo"),
-      options,
-    ),
+      options
+    )
   );
 
   return messages.filter(Boolean);
@@ -2486,7 +2688,7 @@ function buildReport({
   const updateErrorsByCdt = buildUpdateErrorsByCdt(summaryByCdt);
   const executionSummaryByCdt = buildExecutionSummaryByCdt(
     executionContext,
-    sourceErrors,
+    sourceErrors
   );
   const code6Candidates = buildCode6Candidates(executionSummaryByCdt);
   const code4Detection = buildCode4Detection(enrichedRows);
@@ -2531,7 +2733,7 @@ function buildReport({
     report.business_summary_text || "",
     Number.isFinite(options?.telegramMaxLength)
       ? options.telegramMaxLength
-      : 3500,
+      : 3500
   );
   report.openclaw_summary_text = buildDetailedSummaryText(report, options);
   report.technical_report = buildTechnicalReport(report, options);
@@ -2545,7 +2747,7 @@ function buildReport({
         "",
       Number.isFinite(options?.telegramMaxLength)
         ? options.telegramMaxLength
-        : 3500,
+        : 3500
     );
   } else if (options?.detailedTelegramMessages) {
     report.telegram_messages = buildTelegramMessages(report, options);
