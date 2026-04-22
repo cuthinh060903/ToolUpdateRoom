@@ -252,6 +252,8 @@
     columnVertical: 0, // stt cột lấy màu bị hàng dọc
     colorExitVerticalBg: "#CCCCCC", // màu ô chuyển bảng hàng dọc thành ngang
     colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+    // Dòng địa chỉ phía trên (vd. "121 Trích Sài") nằm trước ô IMPORTRANGE — bỏ qua cho đến khi gặp công thức nhập khối
+    address_only_after_import_range: true,
 
   },
   {

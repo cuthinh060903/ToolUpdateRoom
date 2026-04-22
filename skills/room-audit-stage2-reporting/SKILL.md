@@ -8,6 +8,7 @@ description: Read room-audit summary output and generate Stage 2 reports for Goo
 ## Purpose
 
 Convert room-audit outputs into:
+
 - daily Google Sheet column updates (`AI Bao cao`), and
 - Telegram message in `II.A.x` / `II.B.x` format.
 
@@ -30,6 +31,7 @@ If required file is missing or empty, stop and return a failure note.
 ## Output Contract
 
 Produce structured data with:
+
 - `run_time`: report timestamp
 - `telegram_text`: multiline text in `II.A.x`, `II.B.x`
 - `sheet_rows`: exactly 7 strings
@@ -46,6 +48,7 @@ If any section has no finding, write `Khong phat hien`.
 ## Google Sheet Target Rules
 
 Use:
+
 - Spreadsheet id: `11EyNOVAMn7ei-J8svcMjpvv1B7AashTUDyRB-gUeHho`
 - Sheet name: `AI Bao cao`
 - Header row: `1`
@@ -53,6 +56,7 @@ Use:
 - First day column: `G`
 
 Column policy (mandatory):
+
 - Each day uses exactly one column.
 - Find column where header row equals current day number.
 - If day column exists:
@@ -83,6 +87,7 @@ II.B.5: ...
 ```
 
 Formatting rules:
+
 - `II.A` = condition/overview conclusions.
 - `II.B` = detailed operational findings by CDT/room groups.
 - One line = one conclusion + one action.
@@ -99,13 +104,30 @@ Formatting rules:
 ## Failure Handling
 
 If parse fails or output is invalid:
+
 - do not post Telegram or write Sheet,
 - return error `STAGE2_PARSE_FAILED`,
 - include short hint: `Check latest-room-audit-summary.txt and handbook rules`.
 
 If Sheet write fails but Telegram succeeds:
+
 - prepend telegram with `[CANH BAO] Sheet update fail`.
 
 If Telegram fails but Sheet succeeds:
+
 - mark execution state `partial_success`.
 
+## Note:
+
+- telegram_text must strictly follow the required multiline II.A/II.B format. Do not return a one-line summary.
+- sheet_rows are for Google Sheet rows only.
+  Do not use II.A.x or II.B.x labels inside sheet_rows.
+  Use exactly:
+
+* row 1 = Muc 1
+* row 2 = Muc 2
+* row 3 = Ma 3
+* row 4 = Ma 4
+* row 5 = Ma 5
+* row 6 = Ma 6
+* row 7 = Ma 7

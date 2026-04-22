@@ -988,6 +988,42 @@ class UpdateRoomSari {
       .trim();
   }
 
+  isImportRangeFormula(formula = "") {
+    const f = formula || "";
+    return /\bIMPORTRANGE\s*\(/i.test(f);
+  }
+
+  /**
+   * Tìm ô chứa tiêu đề "ĐỊA CHỈ:" (có thể lệch sang cột B/C khi IMPORTRANGE).
+   * Nếu nhiều ô cùng dòng khớp, lấy ô cuối (banner xếp chồng trên một dòng).
+   */
+  findAddressBannerTextInRow(row, startCol = 0, colCount = 4) {
+    let lastMatch = "";
+    for (let c = 0; c < colCount; c++) {
+      const colIndex = startCol + c;
+      const raw = this.normalizeSheetCellText(
+        row?.[`field${colIndex}`]?.value,
+      );
+      if (!raw) {
+        continue;
+      }
+      if (
+        /^dia\s*chi\s*:/i.test(this.normalizeComparableText(raw))
+      ) {
+        lastMatch = raw;
+      }
+    }
+    return lastMatch;
+  }
+
+  stripAddressBannerPrefix(rawAddress = "") {
+    let address = this.normalizeSheetCellText(rawAddress);
+    if (address && address.includes(":")) {
+      address = address.split(":").slice(1).join(":").trim();
+    }
+    return address;
+  }
+
   isLikelySheetNoteAddress(value = "") {
     const normalized = this.normalizeComparableText(value);
     if (!normalized) {
@@ -2910,8 +2946,13 @@ class UpdateRoomSari {
               : null;
 
             const hyperlink = this.extractHyperlinkFromCell(cell);
+            const formulaValue =
+              cell?.userEnteredValue?.formulaValue ||
+              cell?.userEnteredValue?.formula ||
+              "";
             obj[`field${colIndex}`] = {
               value,
+              formula: formulaValue,
               bgColor: backgroundColorHex,
               textColor: textColorHex,
               hyperlink: hyperlink,
@@ -3225,6 +3266,10 @@ class UpdateRoomSari {
       let datas = [];
       let count = 0;
       let address;
+      const requireImportRangeBeforeAddress = Boolean(
+        huydev?.address_only_after_import_range,
+      );
+      let importRangeSeen = !requireImportRangeBeforeAddress;
       for (let row of results) {
         count++;
         // if(huydev?.header && count <= huydev.header) {
@@ -3234,17 +3279,46 @@ class UpdateRoomSari {
           !this.isEmpty(huydev?.columnVertical) &&
           !this.isEmpty(huydev?.colorExitVerticalBg)
         ) {
-          const verticalCell = row[`field${huydev.columnVertical}`];
+          const vCol = Number(huydev.columnVertical);
+          const verticalCell = row[`field${vCol}`];
+
+          if (requireImportRangeBeforeAddress) {
+            let importRangeRow = false;
+            for (let c = 0; c < 4; c++) {
+              const f = row[`field${c}`]?.formula || "";
+              if (this.isImportRangeFormula(f)) {
+                importRangeRow = true;
+                break;
+              }
+            }
+            if (importRangeRow) {
+              importRangeSeen = true;
+              address = undefined;
+              continue;
+            }
+          }
+
           const rowBgColor = (verticalCell?.bgColor || "").toLowerCase();
           const markerBgColor = (huydev.colorExitVerticalBg || "")
             .toString()
             .toLowerCase();
-          if (rowBgColor && rowBgColor.includes(markerBgColor)) {
-            address = this.normalizeSheetCellText(verticalCell?.value);
-            if (address && address.includes(":")) {
-              address = address.split(":").slice(1).join(":").trim(); // Lấy phần sau dấu ":" đầu tiên
+          const isGreyAddressRow =
+            rowBgColor && rowBgColor.includes(markerBgColor);
+
+          const bannerRaw = this.findAddressBannerTextInRow(row, vCol, 4);
+          const isAddressBannerText = Boolean(bannerRaw);
+
+          if (isGreyAddressRow || isAddressBannerText) {
+            if (requireImportRangeBeforeAddress && !importRangeSeen) {
+              continue;
             }
-            continue; // Bỏ qua các hàng có màu nền đã chỉ định
+            const rawForAddress =
+              bannerRaw ||
+              this.normalizeSheetCellText(verticalCell?.value);
+            if (rawForAddress) {
+              address = this.stripAddressBannerPrefix(rawForAddress);
+            }
+            continue;
           }
         } else {
           let tempAddr = row[`field${huydev.address_column[0]}`]?.value; // Lấy địa chỉ từ cột đã chỉ định
@@ -4671,6 +4745,10 @@ class UpdateRoomSari {
   }
 
   normalizePriceValue(priceStr, config = {}) {
+    const hesogiaNum = Number(config?.hesogia);
+    const treatSmallPlainNumberAsUsd =
+      Number.isFinite(hesogiaNum) && hesogiaNum > 1;
+
     if (typeof priceStr === "number") {
       if (!Number.isFinite(priceStr) || priceStr <= 0) {
         return 0;
@@ -4682,6 +4760,9 @@ class UpdateRoomSari {
         }
       }
       if (priceStr >= 1000) {
+        return Math.round(priceStr);
+      }
+      if (treatSmallPlainNumberAsUsd) {
         return Math.round(priceStr);
       }
       return Math.round(priceStr * 1000000);
@@ -4707,6 +4788,7 @@ class UpdateRoomSari {
       .replace(/vn\u0111|vnd|\u0111/g, "")
       .replace(/\s*-\s*$/g, "")
       .trim();
+    normalizedPrice = normalizedPrice.replace(/(\d)\s+(?=\d)/g, "$1");
 
     if (normalizedPrice.includes("-")) {
       return this.handleNormalizedPriceRange(normalizedPrice, config);
@@ -4744,6 +4826,9 @@ class UpdateRoomSari {
       const decimalValue = parseFloat(decimalMatch[0]);
       if (decimalValue >= 1000) {
         return this.scalePlainPriceNumber(Math.round(decimalValue), config);
+      }
+      if (treatSmallPlainNumberAsUsd) {
+        return Math.round(decimalValue);
       }
       return Math.round(decimalValue * 1000000);
     }
