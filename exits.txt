@@ -4439,3 +4439,149 @@ du học 1110|du_lich|gid:246641757|21/4/2026-9:48:27|TRUE
 1br avail|hybrid|gid:2144068176|22/4/2026-9:39:44|TRUE
 2br|hybrid|gid:2083855926|22/4/2026-10:11:25|TRUE
 3-4 avail|hybrid|gid:1357479516|22/4/2026-10:14:24|FALSE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|22/4/2026-15:49:31|TRUE
+3 4ps|chdv|gid:0|22/4/2026-15:51:45|TRUE
+4 hallo|chdv|gid:0|22/4/2026-15:51:56|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|22/4/2026-15:54:20|TRUE
+1br avail|hybrid|gid:2144068176|22/4/2026-15:55:33|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:2|code:|price:2|exitCol:|exitDriver:12|header:0|22/4/2026-15:58:09|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:3|code:|price:3|exitCol:|exitDriver:12|header:0|22/4/2026-15:59:55|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:2|code:|price:2|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:11|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:3|code:|price:3|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:33|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:4|code:|price:4|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:42|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:4|code:|price:4|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:46|TRUE
+2br|hybrid|gid:2083855926|22/4/2026-16:00:46|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:5|code:|price:5|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:46|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:6|code:|price:6|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:48|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:5|code:|price:5|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:50|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:7|code:|price:7|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:51|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:6|code:|price:6|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:53|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:7|code:|price:7|exitCol:|exitDriver:12|header:0|22/4/2026-16:00:55|TRUE
+3-4 avail|hybrid|gid:1357479516|22/4/2026-16:04:35|TRUE
+6|chdv|gid:0|22/4/2026-16:05:07|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|22/4/2026-16:05:40|TRUE
+8|hybrid|gid:261999225|22/4/2026-16:09:49|TRUE
+9 nguyễn linh|chdv|gid:2025812006|22/4/2026-16:10:11|TRUE
+10 b home|chdv|gid:0|22/4/2026-16:10:23|TRUE
+12 dp house_chính chủ|chdv|gid:933713048|22/4/2026-16:10:33|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:2|code:|price:2|exitCol:|exitDriver:12|header:0|22/4/2026-16:10:38|TRUE
+13 sunny|chdv|gid:0|22/4/2026-16:10:40|TRUE
+14 vnfi|chdv|gid:181277674|22/4/2026-16:10:55|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:3|code:|price:3|exitCol:|exitDriver:12|header:0|22/4/2026-16:11:00|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:4|code:|price:4|exitCol:|exitDriver:12|header:0|22/4/2026-16:11:13|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:5|code:|price:5|exitCol:|exitDriver:12|header:0|22/4/2026-16:11:17|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:6|code:|price:6|exitCol:|exitDriver:12|header:0|22/4/2026-16:11:20|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:7|code:|price:7|exitCol:|exitDriver:12|header:0|22/4/2026-16:11:22|TRUE
+15 th home|chdv|gid:1379591217|22/4/2026-16:11:29|TRUE
+16 linh anh|chdv|gid:0|22/4/2026-16:11:45|TRUE
+17 friendly|chdv|gid:0|22/4/2026-16:11:52|TRUE
+17 friendly|du_lich|gid:0|22/4/2026-16:11:55|TRUE
+18 bq home|chdv|gid:0|22/4/2026-16:12:01|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:2|code:|price:2|exitCol:|exitDriver:12|header:0|22/4/2026-16:12:04|TRUE
+20 my home|chdv|gid:0|22/4/2026-16:12:07|TRUE
+21 ren house|chdv|gid:0|22/4/2026-16:12:27|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:3|code:|price:3|exitCol:|exitDriver:12|header:0|22/4/2026-16:12:29|TRUE
+22 min anh|chdv|gid:0|22/4/2026-16:12:33|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:4|code:|price:4|exitCol:|exitDriver:12|header:0|22/4/2026-16:12:43|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:5|code:|price:5|exitCol:|exitDriver:12|header:0|22/4/2026-16:12:48|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:6|code:|price:6|exitCol:|exitDriver:12|header:0|22/4/2026-16:12:50|TRUE
+Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:7|code:|price:7|exitCol:|exitDriver:12|header:0|22/4/2026-16:12:52|TRUE
+23|chdv|22/4/2026-16:13:14|TRUE
+24 sala|hybrid|gid:988404169|22/4/2026-16:14:11|TRUE
+25 vivarent|chdv|gid:0|22/4/2026-16:14:26|TRUE
+26 time|chdv|gid:0|22/4/2026-16:15:57|TRUE
+27 big home|chdv|gid:1859646041|22/4/2026-16:16:21|TRUE
+32 bk home|chdv|gid:0|22/4/2026-16:19:47|TRUE
+35 family cdt|chdv|gid:0|22/4/2026-16:21:00|TRUE
+37 bmc|chdv|gid:1061551170|22/4/2026-16:21:07|TRUE
+38 Huy|chdv|gid:0|22/4/2026-16:21:18|TRUE
+39 dũng land dd|chdv|gid:246641757|22/4/2026-16:21:20|TRUE
+39 dũng land tx|chdv|gid:450080401|22/4/2026-16:21:21|TRUE
+39 dũng land hbt|chdv|gid:246641757|22/4/2026-16:21:23|TRUE
+39 dũng land hm|chdv|gid:246641757|22/4/2026-16:21:25|TRUE
+39 dũng land ntl|chdv|gid:246641757|22/4/2026-16:21:26|TRUE
+40 nv home|chdv|gid:246641757|22/4/2026-16:21:38|TRUE
+42|chdv|gid:652836847|22/4/2026-16:21:58|TRUE
+44 tam phát|chdv|gid:246641757|22/4/2026-16:22:00|TRUE
+45|chdv|gid:0|22/4/2026-16:22:15|TRUE
+48 dd|hybrid|gid:77508200|22/4/2026-16:22:38|TRUE
+48 cg|hybrid|gid:106711673|22/4/2026-16:22:57|TRUE
+48 bd|hybrid|gid:293878217|22/4/2026-16:23:03|TRUE
+48 tx|hybrid|gid:1583965584|22/4/2026-16:23:21|TRUE
+48 hbt|hybrid|gid:873208498|22/4/2026-16:23:29|TRUE
+48 hm|hybrid|gid:452880823|22/4/2026-16:23:34|TRUE
+48 hd|hybrid|gid:556045727|22/4/2026-16:23:38|TRUE
+48 hk|hybrid|gid:172952590|22/4/2026-16:23:43|TRUE
+48 th|hybrid|gid:263710512|22/4/2026-16:23:51|TRUE
+48 btl|hybrid|gid:2008534888|22/4/2026-16:23:58|TRUE
+49 roc land hiếu|chdv|gid:246641757|22/4/2026-16:24:00|TRUE
+49 roc land l,m,h|chdv|gid:246641757|22/4/2026-16:24:02|TRUE
+49 roc land mach ha|chdv|gid:246641757|22/4/2026-16:24:03|TRUE
+49 roc land mach kien|chdv|gid:246641757|22/4/2026-16:24:04|TRUE
+49 roc land HT|chdv|gid:246641757|22/4/2026-16:24:05|TRUE
+50 dg home|chdv|gid:246641757|22/4/2026-16:24:16|TRUE
+52|chdv|gid:246641757|22/4/2026-16:24:21|TRUE
+56|chdv|gid:246641757|22/4/2026-16:24:32|TRUE
+58 a thích|chdv|gid:246641757|22/4/2026-16:24:41|TRUE
+61|chdv|gid:246641757|22/4/2026-16:24:49|TRUE
+62|chdv|gid:246641757|22/4/2026-16:24:58|TRUE
+63 an khoa|chdv|gid:246641757|22/4/2026-16:25:06|TRUE
+65 ht house|chdv|gid:246641757|22/4/2026-16:25:14|TRUE
+67 e.dương|chdv|gid:246641757|22/4/2026-16:25:16|TRUE
+68 real home|chdv|gid:246641757|22/4/2026-16:25:19|TRUE
+72 nic chdv|chdv|gid:246641757|22/4/2026-16:25:23|TRUE
+73 nic|chdv|gid:1670213152|22/4/2026-16:25:35|TRUE
+74 a đức|chdv|gid:246641757|22/4/2026-16:25:36|TRUE
+75 an|chdv|gid:246641757|22/4/2026-16:25:37|TRUE
+81|hybrid|gid:952481791|22/4/2026-16:27:09|TRUE
+82 a trung|chdv|gid:246641757|22/4/2026-16:27:21|TRUE
+84 tnv vp|chdv|gid:1899046082|22/4/2026-16:27:47|TRUE
+89 big home|chdv|gid:558939324|22/4/2026-16:28:05|TRUE
+90 spartar|chdv|gid:246641757|22/4/2026-16:28:21|TRUE
+91 e.dương|chdv|gid:246641757|22/4/2026-16:28:25|TRUE
+93|chdv|gid:1876035427|22/4/2026-16:28:44|TRUE
+98 q home|chdv|gid:246641757|22/4/2026-16:28:50|TRUE
+99 livin joy|chdv|gid:319857072|22/4/2026-16:29:01|TRUE
+106 trọ xinh|chdv|gid:246641757|22/4/2026-16:29:05|TRUE
+108 ting tong|chdv|gid:246641757|22/4/2026-16:29:17|TRUE
+109 an home cg|chdv|gid:246641757|22/4/2026-16:29:18|TRUE
+112 an bình|chdv|gid:246641757|22/4/2026-16:29:31|TRUE
+114 safety|chdv|gid:246641757|22/4/2026-16:29:33|TRUE
+115 famous|chdv|gid:246641757|22/4/2026-16:29:43|TRUE
+116 thiên minh|chdv|gid:246641757|22/4/2026-16:29:46|TRUE
+117 c huệ|hybrid|gid:339800651|22/4/2026-16:30:33|TRUE
+120|chdv|22/4/2026-16:30:53|TRUE
+122 comi|chdv|gid:246641757|22/4/2026-16:31:00|TRUE
+123|hybrid|gid:1698257815|22/4/2026-16:31:06|TRUE
+124 good land|chdv|gid:1990190681|22/4/2026-16:31:40|TRUE
+127|hybrid|gid:1046830441|22/4/2026-16:32:18|TRUE
+128 cema|chdv|gid:246641757|22/4/2026-16:32:24|TRUE
+129|hybrid|gid:705228592|22/4/2026-16:32:42|TRUE
+131 suri|chdv|gid:246641757|22/4/2026-16:32:45|TRUE
+132|hybrid|gid:246641757|22/4/2026-16:32:57|TRUE
+133 suha|chdv|gid:246641757|22/4/2026-16:33:09|TRUE
+134 ngô giang|hybrid|gid:305799027|22/4/2026-16:34:14|TRUE
+3 4ps|chdv|gid:815077823|addr:2|room:3|code:|price:6|exitCol:4|exitDriver:3|header:2|22/4/2026-16:34:27|TRUE
+unknown_web|chdv|22/4/2026-16:34:33|TRUE
+140|chdv|gid:523673045|22/4/2026-16:34:56|TRUE
+141 full house|chdv|gid:246641757|22/4/2026-16:35:02|TRUE
+143|hybrid|gid:1216219936|22/4/2026-16:35:10|TRUE
+144 a.lợi|hybrid|gid:583704164|22/4/2026-16:35:17|TRUE
+145 e home|chdv|gid:246641757|22/4/2026-16:35:22|TRUE
+146 e.dũng bé|chdv|gid:246641757|22/4/2026-16:35:23|TRUE
+150 kant|chdv|gid:246641757|22/4/2026-16:35:30|TRUE
+155|hybrid|gid:1534031757|22/4/2026-16:36:26|TRUE
+160 alaya chdv|chdv|gid:246641757|22/4/2026-16:36:30|TRUE
+232|chdv|gid:2118244047|22/4/2026-16:36:36|TRUE
+246 - Hạnh 0376977777 cầu giấy+ nam từ liêm|chdv|gid:246641757|22/4/2026-16:36:37|TRUE
+257|chdv|gid:800541399|22/4/2026-16:36:53|TRUE
+282|chdv|gid:628519795|22/4/2026-16:36:57|TRUE
+339|du_lich|gid:246641757|22/4/2026-16:37:00|TRUE
+350: l.anh chdv|chdv|gid:246641757|22/4/2026-16:37:12|TRUE
+392|hybrid|gid:998100439|22/4/2026-16:37:39|TRUE
+595|hybrid|gid:833622737|22/4/2026-16:38:02|TRUE
+685|chdv|gid:1758258738|22/4/2026-16:38:16|TRUE
+1109|du_lich|gid:246641757|22/4/2026-16:38:18|TRUE
+du học 1110|du_lich|gid:246641757|22/4/2026-16:38:19|TRUE
+1605- 0968547883 Vifahome|chdv|gid:246641757|22/4/2026-16:38:23|TRUE
+3 4ps|chdv|gid:815077823|addr:2|room:3|code:|price:6|exitCol:4|exitDriver:3|header:2|22/4/2026-16:43:54|TRUE

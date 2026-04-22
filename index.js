@@ -186,6 +186,69 @@ class UpdateRoomSari {
     return null;
   }
 
+  pickImageSourceCandidate(rawValue) {
+    if (!rawValue) {
+      return null;
+    }
+
+    const normalized = this.normalizeExternalUrl(rawValue);
+    if (!normalized) {
+      return null;
+    }
+
+    if (this.getImageSourceType(normalized) || this.extractDriveLink(normalized)) {
+      return normalized;
+    }
+
+    return null;
+  }
+
+  resolveImageDriverFromCell(cell = {}) {
+    const hyperlinkCandidate = this.pickImageSourceCandidate(cell?.hyperlink || "");
+    if (hyperlinkCandidate) {
+      return hyperlinkCandidate;
+    }
+
+    const formulaLink = this.extractHyperlinkFromFormula(cell?.formula || "");
+    const formulaCandidate = this.pickImageSourceCandidate(formulaLink);
+    if (formulaCandidate) {
+      return formulaCandidate;
+    }
+
+    const valueCandidate = this.extractImageSourceLink(cell?.value || "");
+    if (valueCandidate) {
+      return valueCandidate;
+    }
+
+    const formulaTextCandidate = this.extractImageSourceLink(cell?.formula || "");
+    if (formulaTextCandidate) {
+      return formulaTextCandidate;
+    }
+
+    return null;
+  }
+
+  resolveImageDriverFromRow(row = {}, preferredColumn = null) {
+    const preferredCell =
+      preferredColumn !== null && preferredColumn !== undefined
+        ? row[`field${preferredColumn}`] || {}
+        : {};
+    const preferredCandidate = this.resolveImageDriverFromCell(preferredCell);
+    if (preferredCandidate) {
+      return preferredCandidate;
+    }
+
+    const fieldKeys = Object.keys(row || {}).filter((key) => key.startsWith("field"));
+    for (const key of fieldKeys) {
+      const candidate = this.resolveImageDriverFromCell(row[key] || {});
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
   extractDriveLink(rawValue) {
     if (!rawValue) return null;
     const match = rawValue
@@ -1128,6 +1191,38 @@ class UpdateRoomSari {
     const roomText = this.normalizeSheetCellText(roomRaw);
     if (!roomText) {
       return "";
+    }
+
+    const normalizePrefixedRoomToken = (token = "") => {
+      const normalizedToken = this.normalizeSheetCellText(token);
+      if (!normalizedToken) {
+        return "";
+      }
+
+      // Some sheets encode room + address prefix in one token (e.g. N6.39304, 2.27504).
+      // Keep only the trailing room digits to avoid creating wrong room names.
+      if (/^[a-z]?\d+(?:\.\d+)+$/i.test(normalizedToken)) {
+        const groups = normalizedToken.match(/\d+/g) || [];
+        if (groups.length >= 2) {
+          const lastGroup = groups[groups.length - 1] || "";
+          if (/^\d{3,4}$/.test(lastGroup)) {
+            return lastGroup;
+          }
+          if (/^\d{5,}$/.test(lastGroup)) {
+            return lastGroup.slice(-3);
+          }
+        }
+      }
+
+      return normalizedToken;
+    };
+
+    const normalizedTokens = roomText
+      .split(/[,\n;]+/)
+      .map((token) => normalizePrefixedRoomToken(token))
+      .filter(Boolean);
+    if (normalizedTokens.length > 0) {
+      return [...new Set(normalizedTokens)].join(", ");
     }
 
     const shouldUseNumericRooms = Boolean(config?.room_number_only);
@@ -3481,11 +3576,10 @@ class UpdateRoomSari {
 
             datas.push({
               ADDRESS: address,
-              IMAGE_DRIVER:
-                row[`field${huydev.exitLinkDriver}`]?.hyperlink ||
-                this.extractImageSourceLink(
-                  row[`field${huydev.exitLinkDriver}`]?.value || ""
-                ),
+              IMAGE_DRIVER: this.resolveImageDriverFromRow(
+                row,
+                huydev.exitLinkDriver
+              ),
               PRICE:
                 this.normalizePriceValue(finalPriceRaw, huydev) *
                 (huydev?.hesogia || 1),
@@ -4892,6 +4986,17 @@ class UpdateRoomSari {
 
   extractChdvRoomNames(text = "") {
     const result = [];
+    const normalizedText = this.normalizeSheetCellText(text);
+
+    // Handle compact "two rooms one price" notation, e.g. "502.402-3.7tr"
+    // -> expand into ["502", "402"] so each room can be matched independently.
+    const compactPairMatches = normalizedText.match(/\b\d{2,4}\.\d{2,4}\b/g) || [];
+    compactPairMatches.forEach((pair) => {
+      const [left, right] = pair.split(".");
+      if (left && right) {
+        result.push(left, right);
+      }
+    });
 
     const chdvPatterns = [
       /\b[pP]?\d{3}[a-zA-Z]?\b/g,
@@ -5183,12 +5288,30 @@ class UpdateRoomSari {
           .map((gid) => this.normalizeSheetCellText(gid))
           .filter(Boolean)
       : [];
+    const toKeyPart = (value) =>
+      this.normalizeSheetCellText(value !== undefined && value !== null ? value : "");
+    const toJoinedKey = (value) => {
+      if (!Array.isArray(value) || value.length === 0) {
+        return "";
+      }
+      return value.map((item) => toKeyPart(item)).join(",");
+    };
+    const configSignatureParts = [
+      `addr:${toJoinedKey(huydev?.address_column)}`,
+      `room:${toJoinedKey(huydev?.room_column)}`,
+      `code:${toJoinedKey(huydev?.building_code_column)}`,
+      `price:${toJoinedKey(huydev?.price_column)}`,
+      `exitCol:${toKeyPart(huydev?.exitColumn)}`,
+      `exitDriver:${toKeyPart(huydev?.exitLinkDriver)}`,
+      `header:${toKeyPart(huydev?.header)}`,
+    ];
+    const configSignature = configSignatureParts.join("|");
 
     if (gidList.length === 1) {
-      return `${webKey}|${typeKey}|gid:${gidList[0]}`;
+      return `${webKey}|${typeKey}|gid:${gidList[0]}|${configSignature}`;
     }
 
-    return `${webKey}|${typeKey}`;
+    return `${webKey}|${typeKey}|${configSignature}`;
   }
 
   async replaceAbbreviations(text, type = "chdv") {
