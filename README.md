@@ -188,7 +188,9 @@ Preset:
 - Task name: `ToolUpdateRoom-RoomAudit-Daily`
 - Entry script: `modules/room-audit/index.js`
 - Log prefix: `room-audit-run`
-- Script arg: none (mặc định không gửi Telegram, không sync sheet)
+- Script arg mặc định:
+  - `--send-telegram=true`
+  - `--sync-report-sheet=true`
 
 ### 3. Run both trong-kin and room audit
 
@@ -216,7 +218,8 @@ Preset:
 - Entry script: `scripts/run-all-daily.js`
 - Log prefix: `all-run`
 - Flow order: `trong-kin` first, `room audit` second
-- Script arg: none (mặc định không gửi Telegram, không sync sheet)
+- Script arg mặc định:
+  - `room-audit` gửi Telegram + sync sheet theo format II.A/II.B
 
 ### Change the schedule time
 
@@ -332,15 +335,34 @@ npm run audit:room -- --rule1-hours=12
 - `--use-api=true|false`: enable or disable API enrichment.
 - `--limit=10`: stop after a specific number of audit rows.
 - `--rule1-hours=24`: change the stale threshold for Rule 1.
+- `--send-telegram=true|false`: gửi hoặc tắt gửi Telegram room-audit.
+- `--sync-report-sheet=true|false`: ghi hoặc tắt ghi Google Sheet báo cáo room-audit.
+- `--report-sheet-spreadsheet-id=...`: override spreadsheet báo cáo (mặc định của chú).
+- `--report-sheet-gid=297377874`: override sheet gid báo cáo.
+- `--report-sheet-header-row=1`: hàng chứa ngày.
+- `--report-sheet-first-data-row=2`: hàng bắt đầu ghi dữ liệu.
+- `--report-sheet-last-data-row=11`: hàng kết thúc ghi dữ liệu.
+- `--report-sheet-start-column=6`: cột ngày đầu tiên (6 = F).
 - `--openclaw-workspace-dir="C:/path/to/workspace"`: override the OpenClaw copy target for this run only.
 
-### Room audit output
+### Room audit output + report delivery
 
-Room audit keeps local report outputs and OpenClaw summary copy:
+Room audit keeps local report outputs, OpenClaw summary copy, đồng thời gửi Telegram và ghi Google Sheet:
 
 - `reports/room-audit/latest-room-audit.json`
 - `reports/room-audit/latest-room-audit.txt`
 - `reports/room-audit/latest-room-audit-summary.txt`
+
+Google Sheet daily report rule:
+- Sheet target mặc định: `11EyNOVAMn7ei-J8svcMjpvv1B7AashTUDyRB-gUeHho` (gid `297377874`)
+- Mỗi ngày dùng 1 cột, bắt đầu từ cột `F`
+- Nếu chạy lại trong cùng ngày: xóa nội dung cột ngày hiện tại (`row 2..11`) rồi ghi lại dữ liệu mới
+- Nếu sang ngày mới: ghi sang cột kế bên phải
+
+Telegram report rule:
+- Gửi `Bắt đầu cập nhật room-audit...` khi bắt đầu chạy
+- Gửi từng dòng báo cáo II.A/II.B thành từng message riêng
+- Gửi `Hoàn thành cập nhật room-audit.` khi kết thúc
 
 ### Expected output after a successful run
 

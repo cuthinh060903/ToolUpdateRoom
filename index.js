@@ -3303,33 +3303,16 @@ class UpdateRoomSari {
             )
         );
       }
-      // text
-      if (huydev.exitColumn !== null && huydev.exit.length > 0) {
-        const exitKeywords = (huydev.exit || [])
-          .flatMap((item) =>
-            item === undefined || item === null
-              ? []
-              : item.toString().split(/[;,|]/)
-          )
-          .map((item) => this.normalizeComparableText(item))
-          .filter(Boolean);
-
-        if (exitKeywords.length > 0) {
-          results = results.filter((row) => {
-            const cellValue = row[`field${huydev.exitColumn}`]?.value;
-            const normalizedCellValue = this.normalizeComparableText(cellValue);
-            if (!normalizedCellValue) {
-              return true;
-            }
-
-            return !exitKeywords.some(
-              (keyword) =>
-                normalizedCellValue === keyword ||
-                normalizedCellValue.includes(keyword)
-            );
-          });
-        }
-      }
+      // text (exit keywords are evaluated per-row later, after address carry-over)
+      // to avoid losing address anchor rows that are marked FULL.
+      const exitKeywords = (huydev.exit || [])
+        .flatMap((item) =>
+          item === undefined || item === null
+            ? []
+            : item.toString().split(/[;,|]/)
+        )
+        .map((item) => this.normalizeComparableText(item))
+        .filter(Boolean);
 
       // address ngang thành dọc
       // if (
@@ -3443,6 +3426,22 @@ class UpdateRoomSari {
           continue; // Bỏ qua nếu địa chỉ không hợp lệ
         }
 
+        const isRowExcludedByExitKeyword =
+          huydev.exitColumn !== null &&
+          exitKeywords.length > 0 &&
+          (() => {
+            const cellValue = row[`field${huydev.exitColumn}`]?.value;
+            const normalizedCellValue = this.normalizeComparableText(cellValue);
+            if (!normalizedCellValue) {
+              return false;
+            }
+            return exitKeywords.some(
+              (keyword) =>
+                normalizedCellValue === keyword ||
+                normalizedCellValue.includes(keyword)
+            );
+          })();
+
         let description = "";
         if (huydev?.mota && huydev?.mota?.length > 0) {
           const docContents = [];
@@ -3519,6 +3518,10 @@ class UpdateRoomSari {
             : null;
 
         roomCols.forEach((roomCol, i) => {
+          if (isRowExcludedByExitKeyword) {
+            return;
+          }
+
           const priceCol =
             priceCols && priceCols[i] !== undefined
               ? priceCols[i]
@@ -3755,6 +3758,7 @@ class UpdateRoomSari {
                   huydev.allow_duplicate_room_names
                 );
                 const roomAllocationPool = new Map();
+                const processedAddressRoomKeys = new Set();
                 if (!countedTotalDongKeys.has(totalDongKey)) {
                   cdtStats[huydev.id].totalDong +=
                     huydev.totalPhongLayDuoc || processedData.length;
@@ -3768,6 +3772,17 @@ class UpdateRoomSari {
                     row["ADDRESS"] !== ""
                   ) {
                     if (row["ADDRESS"] && row["ROOMS"]) {
+                      const dedupeKey = `${this.normalizeComparableText(
+                        row["ADDRESS"]
+                      )}|${this.normalizeComparableText(row["ROOMS"])}`;
+                      if (processedAddressRoomKeys.has(dedupeKey)) {
+                        console.log(
+                          `[DEBUG] Skip duplicate ADDRESS+ROOMS in same sheet run: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`
+                        );
+                        continue;
+                      }
+                      processedAddressRoomKeys.add(dedupeKey);
+
                       console.log(
                         `[DEBUG] Row processing: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`
                       );
@@ -4964,6 +4979,12 @@ class UpdateRoomSari {
       return "";
     }
 
+    // Keep plain numeric room tokens as-is.
+    // Avoid mapping "2" -> "2k1n" (or similar) via loose alias contains checks.
+    if (/^\d+$/.test(normalizedValue)) {
+      return normalizedValue;
+    }
+
     for (const [canonicalName, aliases] of Object.entries(roomNameAliases)) {
       const candidates = [canonicalName, ...(aliases || [])]
         .map((alias) => this.normalizeDuLichRoomName(alias))
@@ -4973,8 +4994,7 @@ class UpdateRoomSari {
         candidates.some(
           (candidate) =>
             normalizedValue === candidate ||
-            normalizedValue.includes(candidate) ||
-            candidate.includes(normalizedValue)
+            normalizedValue.includes(candidate)
         )
       ) {
         return this.normalizeDuLichRoomName(canonicalName);

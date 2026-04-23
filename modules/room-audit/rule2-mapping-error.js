@@ -1,5 +1,5 @@
 function looksLikePriceText(value = "") {
-  return /(?:^|\s)(\d+([.,]\d+)?\s*(tr|trieu|triệu|m|k|vnd|d|đ)|\d{6,})(?:\s|$)/i.test(
+  return /(?:^|\s)(\$+\s*\d+([.,]\d+)?|\d+([.,]\d+)?\s*(tr|trieu|triệu|m|k|vnd|usd|d|đ|\$)|\d{6,})(?:\s|$)/i.test(
     value,
   );
 }
