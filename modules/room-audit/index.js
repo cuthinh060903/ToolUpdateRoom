@@ -7,6 +7,10 @@ const {
   formatLocalDateTime,
 } = require("./build-report");
 const { repairVietnameseText } = require("./text-normalize");
+const {
+  deliverRoomAuditReport,
+  sendRoomAuditTelegramStatus,
+} = require("./report-delivery");
 
 const LOG_FILES = [
   "ggsheet.txt",
@@ -590,6 +594,52 @@ function buildRunOptions(argv = [], env = process.env) {
       args.debug ?? env.ROOM_AUDIT_DEBUG ?? env.npm_config_debug,
       false,
     ),
+    sendTelegram: toBoolean(
+      args["send-telegram"] ??
+        env.ROOM_AUDIT_SEND_TELEGRAM ??
+        env.npm_config_send_telegram,
+      true,
+    ),
+    syncReportSheet: toBoolean(
+      args["sync-report-sheet"] ??
+        env.ROOM_AUDIT_SYNC_REPORT_SHEET ??
+        env.npm_config_sync_report_sheet,
+      true,
+    ),
+    reportSheetSpreadsheetId:
+      args["report-sheet-spreadsheet-id"] ??
+      env.ROOM_AUDIT_REPORT_SPREADSHEET_ID ??
+      env.npm_config_report_sheet_spreadsheet_id,
+    reportSheetGid: parseNumber(
+      args["report-sheet-gid"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_GID ??
+        env.npm_config_report_sheet_gid,
+      297377874,
+    ),
+    reportSheetHeaderRow: parseNumber(
+      args["report-sheet-header-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_HEADER_ROW ??
+        env.npm_config_report_sheet_header_row,
+      1,
+    ),
+    reportSheetFirstDataRow: parseNumber(
+      args["report-sheet-first-data-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_FIRST_DATA_ROW ??
+        env.npm_config_report_sheet_first_data_row,
+      2,
+    ),
+    reportSheetLastDataRow: parseNumber(
+      args["report-sheet-last-data-row"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_LAST_DATA_ROW ??
+        env.npm_config_report_sheet_last_data_row,
+      11,
+    ),
+    reportSheetStartColumn: parseNumber(
+      args["report-sheet-start-column"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_START_COLUMN ??
+        env.npm_config_report_sheet_start_column,
+      6,
+    ),
     openClawWorkspaceDir:
       args["openclaw-workspace-dir"] ??
       env.ROOM_AUDIT_OPENCLAW_WORKSPACE_DIR ??
@@ -622,6 +672,7 @@ async function runAuditFlow(options = {}) {
   );
 
   await ensureDirectory(outputDir);
+  await sendRoomAuditTelegramStatus("Bắt đầu cập nhật room-audit...", options);
 
   try {
     const executionContextByCdt = new Map();
@@ -803,6 +854,8 @@ async function runAuditFlow(options = {}) {
       latestSummaryPath,
       options.openClawWorkspaceDir,
     );
+    const deliveryResult = await deliverRoomAuditReport(report, options);
+    await sendRoomAuditTelegramStatus("Hoàn thành cập nhật room-audit.", options);
 
     return {
       report,
@@ -816,9 +869,14 @@ async function runAuditFlow(options = {}) {
         openClawSummaryPath: openClawSummaryCopy.targetPath,
         openClawSummaryCopied: openClawSummaryCopy.copied,
         openClawSummaryCopyError: openClawSummaryCopy.error,
+        reportDelivery: deliveryResult,
       },
     };
   } catch (error) {
+    await sendRoomAuditTelegramStatus(
+      `Cập nhật room-audit thất bại: ${error?.message || error}`,
+      options,
+    );
     throw error;
   }
 }
@@ -840,6 +898,17 @@ if (require.main === module) {
         }`,
       );
       console.log(`[room-audit] Total rows: ${report.total_rows}`);
+      console.log(
+        `[room-audit] Report delivery: sheet=${
+          output.reportDelivery?.sheetResult?.synced
+            ? "synced"
+            : output.reportDelivery?.sheetResult?.reason || "skipped"
+        }, telegram=${
+          output.reportDelivery?.telegramResult?.sent
+            ? `sent ${output.reportDelivery?.telegramResult?.count || 0} messages`
+            : output.reportDelivery?.telegramResult?.reason || "skipped"
+        }`,
+      );
     })
     .catch((error) => {
       console.error("[room-audit] Run failed:", error?.message || error);

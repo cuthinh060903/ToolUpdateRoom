@@ -84,7 +84,7 @@ npm run run:room-audit
 - Tên task: `ToolUpdateRoom-RoomAudit-Daily`
 - File chạy: `modules/room-audit/index.js`
 - Log ghi vào: `logs\room-audit-run-YYYY-MM-DD_HH-mm-ss.log`
-- Preset này mặc định không gửi Telegram và không sync sheet (chỉ tạo report local)
+- Preset này mặc định có gửi Telegram room-audit và sync Google Sheet theo mẫu II.A/II.B của chú
 
 Nếu muốn chạy tay trực tiếp, không qua wrapper hẹn giờ:
 

@@ -4585,3 +4585,43 @@ unknown_web|chdv|22/4/2026-16:34:33|TRUE
 du học 1110|du_lich|gid:246641757|22/4/2026-16:38:19|TRUE
 1605- 0968547883 Vifahome|chdv|gid:246641757|22/4/2026-16:38:23|TRUE
 3 4ps|chdv|gid:815077823|addr:2|room:3|code:|price:6|exitCol:4|exitDriver:3|header:2|22/4/2026-16:43:54|TRUE
+3 4ps|chdv|gid:815077823|addr:2|room:3|code:|price:6|exitCol:4|exitDriver:3|header:2|22/4/2026-16:52:57|TRUE
+3 4ps|chdv|gid:815077823|addr:2|room:3|code:|price:6|exitCol:4|exitDriver:3|header:2|22/4/2026-16:53:18|TRUE
+4 hallo|chdv|gid:0|addr:1|room:4|code:|price:6|exitCol:7|exitDriver:10|header:2|23/4/2026-9:07:08|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-9:14:21|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:7|exitDriver:8|header:5|23/4/2026-9:14:57|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-9:22:36|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:7|exitDriver:8|header:5|23/4/2026-9:23:05|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-9:33:58|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-9:34:08|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-9:42:43|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-9:42:52|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-9:47:39|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-9:47:49|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-9:50:11|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-9:50:16|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-10:00:48|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-10:00:56|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-10:05:54|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-10:06:05|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-10:07:15|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-10:07:23|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-10:08:39|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-10:08:48|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-10:14:19|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-10:14:27|TRUE
+10 b home|hybrid|gid:0|addr:1|room:3|code:|price:6|exitCol:7|exitDriver:8|header:5|23/4/2026-10:15:32|TRUE
+10 b home|hybrid|gid:892656526|addr:1|room:2|code:|price:5|exitCol:6|exitDriver:8|header:5|23/4/2026-10:15:40|TRUE
+12 dp house|chdv|gid:192250626|addr:1|room:2|code:|price:5|exitCol:9|exitDriver:4|header:4|23/4/2026-10:31:05|TRUE
+12 dp house_chính chủ|chdv|gid:833885440|addr:1|room:3|code:|price:4|exitCol:5|exitDriver:6|header:2|23/4/2026-10:31:12|TRUE
+12 dp house_chính chủ|chdv|gid:1795680526|addr:1|room:3|code:|price:4|exitCol:5|exitDriver:6|header:2|23/4/2026-10:31:37|TRUE
+12 dp house_chính chủ|chdv|gid:1453241145|addr:1|room:3|code:|price:4|exitCol:5|exitDriver:6|header:2|23/4/2026-10:31:43|TRUE
+12 dp house_chính chủ|chdv|gid:91148695|addr:1|room:3|code:|price:4|exitCol:5|exitDriver:6|header:2|23/4/2026-10:31:48|TRUE
+12 dp house_chính chủ|chdv|gid:1972585217|addr:1|room:3|code:|price:4|exitCol:5|exitDriver:6|header:2|23/4/2026-10:31:52|TRUE
+12 dp house_chính chủ|chdv|gid:550482154|addr:1|room:3|code:|price:4|exitCol:5|exitDriver:6|header:2|23/4/2026-10:32:11|TRUE
+13 sunny|chdv|gid:0|addr:1|room:7|code:|price:4|exitCol:5|exitDriver:6|header:4|23/4/2026-14:14:58|TRUE
+13 sunny|chdv|gid:0|addr:1|room:7|code:|price:4|exitCol:5|exitDriver:6|header:4|23/4/2026-14:44:51|TRUE
+18 bq home|chdv|gid:0|addr:1|room:3|code:|price:2|exitCol:5|exitDriver:6|header:3|23/4/2026-14:45:25|TRUE
+18 bq home|chdv|gid:0|addr:1|room:3|code:|price:2|exitCol:5|exitDriver:6|header:3|23/4/2026-14:48:16|TRUE
+19 airstay|chdv|gid:1603012871|addr:3|room:2|code:|price:11|exitCol:5|exitDriver:6|header:0|23/4/2026-14:57:39|TRUE
+19 airstay|chdv|gid:721978481|addr:3|room:2|code:|price:11|exitCol:5|exitDriver:6|header:0|23/4/2026-15:10:34|TRUE
