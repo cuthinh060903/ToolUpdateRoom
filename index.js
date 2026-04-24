@@ -1178,6 +1178,10 @@ class UpdateRoomSari {
       return true;
     }
 
+    if (/^no$/i.test(normalized)) {
+      return true;
+    }
+
     return [
       /^kinh nho\b/i,
       /\bdoi tac\b/i,
@@ -3067,6 +3071,7 @@ class UpdateRoomSari {
         `An error occurred in spreadsheets (${spreadsheetId}, ${targetGid}):`,
         error
       );
+      throw error;
     }
   }
 
@@ -3107,7 +3112,12 @@ class UpdateRoomSari {
   }
 
   getRangeFromSheetData(data, rangeStr) {
-    const [start, end] = rangeStr.split(":");
+    const [startRaw, endRaw] = (rangeStr || "").toString().split(":");
+    const start = (startRaw || "").trim();
+    const end = (endRaw || startRaw || "").trim();
+    if (!start || !end) {
+      return "";
+    }
 
     // Chuyển chữ cột sang số (A => 0, H => 7)
     const colToIndex = (col) => {
@@ -3133,7 +3143,7 @@ class UpdateRoomSari {
     const result = data.slice(startRow, endRow + 1).map((rowObj) => {
       const row = [];
       for (let i = startCol; i <= endCol; i++) {
-        row.push(rowObj[`field${i}`].value || "");
+        row.push(rowObj?.[`field${i}`]?.value || "");
       }
       return row;
     });
@@ -3245,7 +3255,28 @@ class UpdateRoomSari {
         const { spreadsheetId, gid } = await this.extractGoogleSheetInfo(
           sheetUrl
         );
-        sheetData = await this.spreadsheets(spreadsheetId, gid);
+        try {
+          sheetData = await this.spreadsheets(spreadsheetId, gid);
+        } catch (error) {
+          const configuredLinkInfo = await this.extractGoogleSheetInfo(
+            huydev.link || ""
+          );
+          const fallbackGid = configuredLinkInfo?.gid;
+          const canFallbackToLinkGid =
+            fallbackGid !== null &&
+            fallbackGid !== undefined &&
+            String(fallbackGid).trim() !== "" &&
+            String(fallbackGid) !== String(gid);
+
+          if (!canFallbackToLinkGid) {
+            throw error;
+          }
+
+          console.warn(
+            `[sheet-fallback] gid=${gid} không tồn tại, thử lại bằng gid trên link=${fallbackGid}`
+          );
+          sheetData = await this.spreadsheets(spreadsheetId, fallbackGid);
+        }
       }
 
       if (huydev.if == "binhthuong") {
@@ -3631,6 +3662,7 @@ class UpdateRoomSari {
       return datas;
     } catch (error) {
       console.error(`Có lỗi xảy ra: ${error}`);
+      throw error;
     }
   }
 
