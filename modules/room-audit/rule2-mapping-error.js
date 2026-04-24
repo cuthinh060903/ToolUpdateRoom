@@ -1,13 +1,108 @@
 function looksLikePriceText(value = "") {
-  return /(?:^|\s)(\$+\s*\d+([.,]\d+)?|\d+([.,]\d+)?\s*(tr|trieu|triệu|m|k|vnd|usd|d|đ|\$)|\d{6,})(?:\s|$)/i.test(
+  return /(?:^|\s)(\$+\s*\d+([.,]\d+)?|\d+([.,]\d+)?\s*(tr|trieu|m|k|vnd|usd|d|\u0111|\$)|\d{6,})(?:\s|$)/i.test(
     value,
   );
+}
+
+function normalizeText(value = "") {
+  return value.toString().trim().replace(/\s+/g, " ");
+}
+
+/** Room + price in one cell (e.g. "402-3tr6", "P20,23-2.5tr") is not a wrong-column signal. */
+function isLikelyRoomPriceCombinedCell(value = "") {
+  const text = normalizeText(value);
+  if (!text) {
+    return false;
+  }
+
+  const segments = text.split(",").map((s) => s.trim()).filter(Boolean);
+  for (const segment of segments) {
+    if (!segment.includes("-")) {
+      continue;
+    }
+    const dashIndex = segment.indexOf("-");
+    const left = segment.slice(0, dashIndex).trim();
+    const right = segment.slice(dashIndex + 1).trim();
+    if (!left || !right) {
+      continue;
+    }
+    if (looksLikePriceText(right)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isRoomLikeText(value = "") {
   return /^(?:phong\s*)?[a-z]?\d{2,5}(?:\.\d+)?[a-z]?$/i.test(
     value.toString().trim(),
   );
+}
+
+function stripTrailingCurrencySuffix(value = "") {
+  return normalizeText(value).replace(/(?:\s*[d\u0111])+\s*$/i, "").trim();
+}
+
+function isLikelyRoomCodeList(value = "") {
+  const text = normalizeText(value);
+  if (!text) {
+    return false;
+  }
+
+  const tokens = text
+    .split(/[,\n;|]+/)
+    .map((token) => stripTrailingCurrencySuffix(token))
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  return tokens.every((token) => {
+    if (isRoomLikeText(token)) {
+      return true;
+    }
+
+    // Ranges such as "202-402" are still room-like values.
+    return /^\d{2,4}\s*[-/]\s*\d{2,4}$/.test(token);
+  });
+}
+
+function isNarrativeNoteText(value = "") {
+  const text = normalizeText(value);
+  if (!text) {
+    return false;
+  }
+
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const letterCount = (text.match(/[A-Za-zÀ-ỹ]/g) || []).length;
+  return wordCount >= 6 && letterCount >= 12;
+}
+
+function isPriceLikeRoomField(value = "") {
+  const text = normalizeText(value);
+  if (!text) {
+    return false;
+  }
+
+  if (isLikelyRoomPriceCombinedCell(text)) {
+    return false;
+  }
+
+  if (isNarrativeNoteText(text)) {
+    return false;
+  }
+
+  if (isLikelyRoomCodeList(text)) {
+    return false;
+  }
+
+  const strippedText = stripTrailingCurrencySuffix(text);
+  if (isRoomLikeText(strippedText)) {
+    return false;
+  }
+
+  return looksLikePriceText(text);
 }
 
 function isPlainNumberString(value = "") {
@@ -81,11 +176,11 @@ function applyRule2MappingError(record) {
     reasons.push("ROOM_NAME_MISSING");
   }
 
-  if (roomName && looksLikePriceText(roomName)) {
+  if (roomName && isPriceLikeRoomField(roomName)) {
     reasons.push("ROOM_NAME_LOOKS_LIKE_PRICE");
   }
 
-  if (roomNameWeb && looksLikePriceText(roomNameWeb)) {
+  if (roomNameWeb && isPriceLikeRoomField(roomNameWeb)) {
     reasons.push("WEB_ROOM_NAME_LOOKS_LIKE_PRICE");
   }
 

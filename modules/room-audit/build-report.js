@@ -48,6 +48,38 @@ function buildRowBusinessKey(row = {}) {
   ].join("|");
 }
 
+function buildUniqueRoomKey(row = {}) {
+  const roomIdKey = normalizeKeyText(row.room_id);
+  if (roomIdKey) {
+    return `room:${roomIdKey}`;
+  }
+
+  const realNewIdKey = normalizeKeyText(row.room_real_new_id);
+  const roomNameKey = normalizeKeyText(row.room_name);
+  if (realNewIdKey && roomNameKey) {
+    return `realnew:${realNewIdKey}|room:${roomNameKey}`;
+  }
+
+  const cdtKey = normalizeKeyText(row.cdt_id);
+  const addressKey = normalizeKeyText(row.address);
+  if (cdtKey && addressKey && roomNameKey) {
+    return `sheet:${cdtKey}|${addressKey}|room:${roomNameKey}`;
+  }
+
+  return buildRowBusinessKey(row);
+}
+
+function countUniqueRooms(rows = []) {
+  const roomKeys = new Set();
+  rows.forEach((row) => {
+    const key = buildUniqueRoomKey(row);
+    if (key) {
+      roomKeys.add(key);
+    }
+  });
+  return roomKeys.size;
+}
+
 function getDefaultBusinessOverridePath() {
   return path.resolve(
     __dirname,
@@ -804,13 +836,9 @@ const SHEET_ADDRESS_FIELD_REASONS = new Set([
   "ADDRESS_MISSING",
 ]);
 
+// Align with report-delivery II.B.5: sheet room-column issues, not API mismatch or price column.
 const SHEET_ROOM_NAME_FIELD_REASONS = new Set([
-  "ROOM_NOT_MATCHED_POSSIBLE_WRONG_COLUMN",
-  "ROOM_NAME_MISSING",
   "ROOM_NAME_LOOKS_LIKE_PRICE",
-  "WEB_ROOM_NAME_LOOKS_LIKE_PRICE",
-  "PRICE_UNPARSEABLE",
-  "PRICE_LOOKS_LIKE_ROOM_NAME",
 ]);
 
 function matchesSheetAddressFieldReason(reason = "") {
@@ -2658,21 +2686,45 @@ function buildReport({
   executionContext = [],
   options = {},
 } = {}) {
+  const selectedErrorCodes = new Set(
+    Array.isArray(options?.testErrors) ? options.testErrors : [],
+  );
+  const hasSelectedErrors = selectedErrorCodes.size > 0;
+  const shouldRunRule2 = !hasSelectedErrors || [3, 4, 5, 6, 7, 9].some((code) => selectedErrorCodes.has(code));
+  const shouldRunRule4 = !hasSelectedErrors || selectedErrorCodes.has(8);
+
   const thresholdHours = Number.isFinite(options?.rule1ThresholdHours)
     ? options.rule1ThresholdHours
     : 24;
 
   const evaluatedRows = rows.map((row) => {
     let nextRow = applyRule1Update(row, { thresholdHours });
-    nextRow = applyRule2MappingError(nextRow);
+    if (shouldRunRule2) {
+      nextRow = applyRule2MappingError(nextRow);
+    } else {
+      nextRow.rule_2_status = "PASS";
+      nextRow.rule_2_reason = [];
+    }
     nextRow = applyRule3RoomStatus(nextRow);
-    nextRow = applyRule4NoImage(nextRow);
+    if (shouldRunRule4) {
+      nextRow = applyRule4NoImage(nextRow);
+    } else {
+      nextRow.rule_4_status = "PASS";
+      nextRow.rule_4_reason = [];
+    }
     nextRow.error_detail = collectErrorDetail(nextRow);
     return nextRow;
   });
   const enrichedRows = applyBusinessConclusions(evaluatedRows, options);
   const rootCauseSummary = summarizeBusinessConclusions(enrichedRows);
-  const totalEmptyRoomsToday = enrichedRows.length;
+  const totalRowsRaw = enrichedRows.length;
+  const totalUniqueRoomsToday = countUniqueRooms(enrichedRows);
+  const duplicateRoomRows = Math.max(0, totalRowsRaw - totalUniqueRoomsToday);
+  const webVacantRoomTotal = Number.isFinite(options?.webVacantRoomTotal)
+    ? Number(options.webVacantRoomTotal)
+    : null;
+  const totalEmptyRoomsToday =
+    webVacantRoomTotal !== null ? webVacantRoomTotal : totalUniqueRoomsToday;
   const totalRoomsWithoutImages =
     enrichedRows.filter(hasConfirmedNoImage).length;
   const totalRoomsWithoutImagesUnknown =
@@ -2696,7 +2748,14 @@ function buildReport({
 
   const report = {
     generated_at: formatLocalDateTime(new Date()),
-    total_rows: enrichedRows.length,
+    total_rows: totalUniqueRoomsToday,
+    total_rows_raw: totalRowsRaw,
+    total_unique_rooms_today: totalUniqueRoomsToday,
+    duplicate_room_rows: duplicateRoomRows,
+    web_vacant_rooms_total: webVacantRoomTotal,
+    web_vacant_rooms_total_source:
+      options?.webVacantRoomTotalSource || "sheet_fallback",
+    web_vacant_rooms_total_error: options?.webVacantRoomTotalError || null,
     source_errors: sourceErrors,
     summary,
     reason_summary: countErrorReasons(enrichedRows),
@@ -2721,6 +2780,9 @@ function buildReport({
     code6_candidates: code6Candidates,
     code4_groups: code4Detection.groups,
     code4_address_keys: [...code4Detection.addressKeys],
+    selected_test_errors: Array.isArray(options?.testErrors)
+      ? options.testErrors
+      : [],
     is_partial_run: isPartialRun,
     rows: enrichedRows,
   };

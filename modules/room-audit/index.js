@@ -1,5 +1,6 @@
 const fs = require("fs").promises;
 const path = require("path");
+const axios = require("axios");
 const { UpdateRoomSari } = require("../../index");
 const { normalizeRoomReport } = require("./normalize-room-report");
 const {
@@ -40,6 +41,14 @@ function parseNumber(value, fallback = null) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseErrorCodeList(value) {
+  return (value || "")
+    .toString()
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 9);
+}
+
 function parseArgs(argv = []) {
   const parsed = {};
 
@@ -66,6 +75,54 @@ function debugLog(enabled, message, payload) {
   }
 
   console.log(`[room-audit][debug] ${message}:`, payload);
+}
+
+async function fetchWebVacantRoomTotal(updater) {
+  if (
+    !updater?.URL_API_ROOM_SEARCH ||
+    !updater?.AUTH_USERNAME ||
+    !updater?.AUTH_PASSWORD
+  ) {
+    return {
+      total: null,
+      error: "ROOM_SEARCH_CREDENTIALS_MISSING",
+    };
+  }
+
+  const encodedCredentials = Buffer.from(
+    `${updater.AUTH_USERNAME}:${updater.AUTH_PASSWORD}`,
+  ).toString("base64");
+  const headers = {
+    Authorization: `Basic ${encodedCredentials}`,
+    "User-Agent": "bot2nguon*",
+  };
+
+  try {
+    const response = await updater.retryRequest(() =>
+      axios.post(
+        `${updater.URL_API_ROOM_SEARCH}?page=0&size=1`,
+        { status: "con" },
+        { headers },
+      ),
+    );
+    const total = Number(response?.data?.totalElements);
+    if (!Number.isFinite(total) || total < 0) {
+      return {
+        total: null,
+        error: "ROOM_SEARCH_TOTAL_INVALID",
+      };
+    }
+
+    return {
+      total,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      total: null,
+      error: error?.message || String(error),
+    };
+  }
 }
 
 function lineContainsAll(line, fragments = []) {
@@ -573,6 +630,11 @@ function buildRunOptions(argv = [], env = process.env) {
     .filter((value) => value !== "")
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
+  const testErrors = parseErrorCodeList(
+    args["test-errors"] ??
+      env.ROOM_AUDIT_TEST_ERRORS ??
+      env.npm_config_test_errors,
+  );
 
   return {
     useApi: toBoolean(
@@ -584,6 +646,7 @@ function buildRunOptions(argv = [], env = process.env) {
       null,
     ),
     onlyIds,
+    testErrors,
     rule1ThresholdHours: parseNumber(
       args["rule1-hours"] ??
         env.ROOM_AUDIT_RULE1_HOURS ??
@@ -638,7 +701,13 @@ function buildRunOptions(argv = [], env = process.env) {
       args["report-sheet-start-column"] ??
         env.ROOM_AUDIT_REPORT_SHEET_START_COLUMN ??
         env.npm_config_report_sheet_start_column,
-      6,
+      7,
+    ),
+    reportSheetDayWindowSize: parseNumber(
+      args["report-sheet-day-window-size"] ??
+        env.ROOM_AUDIT_REPORT_SHEET_DAY_WINDOW_SIZE ??
+        env.npm_config_report_sheet_day_window_size,
+      8,
     ),
     openClawWorkspaceDir:
       args["openclaw-workspace-dir"] ??
@@ -675,6 +744,31 @@ async function runAuditFlow(options = {}) {
   await sendRoomAuditTelegramStatus("Bắt đầu cập nhật room-audit...", options);
 
   try {
+    const isFullRunScope =
+      (!Array.isArray(options.onlyIds) || options.onlyIds.length === 0) &&
+      !Number.isFinite(options.limit);
+    let webVacantRoomSnapshot = {
+      total: null,
+      error: null,
+      source: "sheet_fallback",
+    };
+    if (options.useApi && isFullRunScope) {
+      const snapshot = await fetchWebVacantRoomTotal(updater);
+      webVacantRoomSnapshot = {
+        total: snapshot.total,
+        error: snapshot.error,
+        source:
+          Number.isFinite(snapshot.total) && snapshot.total >= 0
+            ? "web_api_status_con"
+            : "sheet_fallback",
+      };
+      if (snapshot.error) {
+        console.warn(
+          `[room-audit][warning] Không lấy được tổng phòng trống từ web API, fallback về số từ sheet: ${snapshot.error}`,
+        );
+      }
+    }
+
     const executionContextByCdt = new Map();
 
     function getExecutionContextForConfig(config = {}) {
@@ -816,7 +910,12 @@ async function runAuditFlow(options = {}) {
       rows,
       sourceErrors,
       executionContext: [...executionContextByCdt.values()],
-      options,
+      options: {
+        ...options,
+        webVacantRoomTotal: webVacantRoomSnapshot.total,
+        webVacantRoomTotalSource: webVacantRoomSnapshot.source,
+        webVacantRoomTotalError: webVacantRoomSnapshot.error,
+      },
     });
 
     if (options.debug) {
@@ -855,7 +954,13 @@ async function runAuditFlow(options = {}) {
       options.openClawWorkspaceDir,
     );
     const deliveryResult = await deliverRoomAuditReport(report, options);
-    await sendRoomAuditTelegramStatus("Hoàn thành cập nhật room-audit.", options);
+    const sheetSyncFailed = deliveryResult?.sheetResult?.reason === "SHEET_SYNC_FAILED";
+    const completionMessage = sheetSyncFailed
+      ? `Hoàn thành cập nhật room-audit (cảnh báo: sync sheet lỗi - ${
+          deliveryResult?.sheetResult?.error || "unknown error"
+        })`
+      : "Hoàn thành cập nhật room-audit.";
+    await sendRoomAuditTelegramStatus(completionMessage, options);
 
     return {
       report,
@@ -902,7 +1007,11 @@ if (require.main === module) {
         `[room-audit] Report delivery: sheet=${
           output.reportDelivery?.sheetResult?.synced
             ? "synced"
-            : output.reportDelivery?.sheetResult?.reason || "skipped"
+            : `${output.reportDelivery?.sheetResult?.reason || "skipped"}${
+                output.reportDelivery?.sheetResult?.error
+                  ? ` (${output.reportDelivery?.sheetResult?.error})`
+                  : ""
+              }`
         }, telegram=${
           output.reportDelivery?.telegramResult?.sent
             ? `sent ${output.reportDelivery?.telegramResult?.count || 0} messages`
