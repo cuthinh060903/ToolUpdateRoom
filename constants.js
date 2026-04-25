@@ -175,20 +175,20 @@
     address_column: [2],
     room_column: [3],
     building_code_column: [null],
-    price_column: [6],
-    name: "3 4ps",
+    price_column: [4],
+    name: "link3 4ps",
     if: "caocap",
     web: "3 4ps",
-    link: "https://docs.google.com/spreadsheets/d/1t17zHnBII9iAHuWCQzmRzhKGOgsvn9yXGp9QwTaOn4U/edit?gid=815077823#gid=815077823",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=2091330969",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [815077823],
+    list_address: [0],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
     exit: [], // tên từ muốn lọc kín
-    exitColumn: 4, // trường này là trường trạng thái loại trừ kín
-    exitLinkDriver: 3, // trường này là trường link driver
-    column: [2, 3, null, 6], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá,
+    exitColumn: 6, // trường này là trường trạng thái loại trừ kín
+    exitLinkDriver: 7, // trường này là trường link driver
+    column: [2, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá,
     hesogia: 1, //nếu vnd = 1 ; usd = 27000
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
     mota: [5, 6, 8, 9, 10], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
@@ -204,10 +204,10 @@
     room_column: [4],
     building_code_column: [null],
     price_column: [6],
-    name: "4 hallo",
+    name: "link4 hallo",
     if: "caocap",
     web: "4 hallo",
-    link: "https://docs.google.com/spreadsheets/d/1C6lYaPEHkXGkg9LpXSeRZNELDKLcxAG7WrNTQtFdD1w/edit?gid=0#gid=0",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1096901110#gid=1096901110",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [0], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc kín
@@ -219,7 +219,7 @@
     column: [1, 4, null, 6], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     hesogia: 1, //nếu vnd = 1 ; usd = 27000
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 3, 8, 9, 12, 13], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota: [2, 3, 9, 8, 13, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 2, // dòng của tiêu đề nằm ngang
     //         columnVertical: 1, // stt ô lấy màu bị hàng dọc
     //         colorExitVerticalBg: "#ffff00ff", // màu ô chuyển bảng hàng dọc thành ngang
@@ -232,7 +232,7 @@
     room_column: [1],
     building_code_column: [null],
     price_column: [10],
-    name: "1br avail",
+    name: "5.1br avail",
     web: "1br avail",
     if: "caocap",
     link: "https://docs.google.com/spreadsheets/d/1Apv1JwG5eokPCMDmxw0EzEwukbI1qlAfp6TaJn7Q2Rw/edit?gid=2144068176#gid=2144068176",
@@ -262,7 +262,7 @@
     room_column: [1],
     building_code_column: [null],
     price_column: [10],
-    name: "2br",
+    name: "5.2br",
     web: "2br",
     if: "caocap",
     link: "https://docs.google.com/spreadsheets/d/1Apv1JwG5eokPCMDmxw0EzEwukbI1qlAfp6TaJn7Q2Rw/edit?gid=2083855926#gid=2083855926",
@@ -290,7 +290,7 @@
     room_column: [1],
     building_code_column: [null],
     price_column: [10],
-    name: "3-4 avail",
+    name: "5.3-4 avail",
     web: "3-4 avail",
     if: "caocap",
     link: "https://docs.google.com/spreadsheets/d/1Apv1JwG5eokPCMDmxw0EzEwukbI1qlAfp6TaJn7Q2Rw/edit?gid=1357479516#gid=1357479516",
@@ -508,7 +508,62 @@
     colorExitVerticalBg: null, // màu ô chuyển bảng hàng dọc thành ngang
     colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
   },
-
+  //  {
+  //   id: 7,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [6],
+  // building_code_column: [null],
+  // price_column: [6],
+  //   name: "link7 happy home 1",
+  //   if: "caocap",
+  //   web: "7.4",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1450835427#gid=1450835427",
+  //    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //  list_address: [0], /// có nhiều id khác nhau
+  //   // exitBackgroundColor: ["#cccccc"], // màu nền ô muốn lọc kín
+  //   // exitTextColor: null, // màu chữ muốn lọc kín
+  //   // exitColumnColor: 0, // cột màu muốn lọc kín
+  //   exit: [], // tên từ muốn lọc
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ kín
+  //   exitLinkDriver: 13, // trường này là trường link driver
+  //   column: [1, 6, null, 6], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  //   hesogia:1, //nếu vnd = 1 ; usd = 27000
+  //   metadata: {before: 1, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
+  //   mota: [11,12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+  //   header: 2, // dòng của tiêu đề nằm ngang
+  //   // columnVertical: 0, // stt cột lấy màu bị hàng dọc
+  //   // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
+  //   // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+  // },
+  //  {
+  //   id: 7,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [7],
+  // building_code_column: [null],
+  // price_column: [7],
+  //   name: "link7 happy home 1",
+  //   if: "caocap",
+  //   web: "7.5",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1450835427#gid=1450835427",
+  //    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //  list_address: [0], /// có nhiều id khác nhau
+  //   // exitBackgroundColor: ["#cccccc"], // màu nền ô muốn lọc kín
+  //   // exitTextColor: null, // màu chữ muốn lọc kín
+  //   // exitColumnColor: 0, // cột màu muốn lọc kín
+  //   exit: [], // tên từ muốn lọc
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ kín
+  //   exitLinkDriver: 13, // trường này là trường link driver
+  //   column: [1, 7, null, 7], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  //   hesogia:1, //nếu vnd = 1 ; usd = 27000
+  //   metadata: {before: 1, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
+  //   mota: [11,12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+  //   header: 2, // dòng của tiêu đề nằm ngang
+  //   // columnVertical: 0, // stt cột lấy màu bị hàng dọc
+  //   // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
+  //   // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+  // },
   {
     id: 8,
     type: "hybrid",
@@ -564,21 +619,21 @@
   },
   {
     id: 10,
-    type: "hybrid",
+    type: "chdv",
     address_column: [1],
     room_column: [3],
     building_code_column: [null],
     price_column: [6],
-    name: "10 b home",
+    name: "link10",
     if: "caocap",
     web: "10 b home",
-    link: "https://docs.google.com/spreadsheets/d/1Qu2IQGoCP7fJ_OhF7v8u8yAVEo_dVmUmdqSYcnSw6zg/edit?hl=vi&gid=0#gid=0",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2033427596#gid=2033427596",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [0], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
-    exit: ["FULL", "Đang setup"], // tên từ muốn lọc
+    exit: ["FULL"], // tên từ muốn lọc
     exitColumn: 7, // trường này là trường trạng thái loại trừ
     exitLinkDriver: 8, // trường này là trường link driver
     column: [1, 3, null, 6], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
@@ -590,46 +645,18 @@
     // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
-    id: 10,
-    type: "hybrid",
-    address_column: [1],
-    room_column: [2],
-    building_code_column: [null],
-    price_column: [5],
-    name: "10 b home",
-    if: "caocap",
-    web: "10 b home",
-    link: "https://docs.google.com/spreadsheets/d/1Qu2IQGoCP7fJ_OhF7v8u8yAVEo_dVmUmdqSYcnSw6zg/edit?hl=vi&gid=892656526#gid=892656526",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [892656526], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: ["FULL"], // tên từ muốn lọc
-    exitColumn: 6, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 8, // trường này là trường link driver
-    column: [1, 2, null, 5], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [3, 4, 9], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 5, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-
-  {
     id: 12,
     type: "chdv",
     address_column: [1],
     room_column: [2],
     building_code_column: [null],
     price_column: [5],
-    name: "12 dp house",
+    name: "link12_dp chính chủ",
     if: "caocap",
-    web: "12 dp house",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=192250626#gid=192250626",
+    web: "12 dp house_chính chủ",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?pli=1&gid=1542567129#gid=1542567129",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [192250626], /// có nhiều id khác nhau
+    list_address: [933713048], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -638,175 +665,120 @@
     exitLinkDriver: 4, // trường này là trường link driver
     column: [1, 2, null, 5], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [7, 8, 11, 12, 13, 14, 15], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota: [7, 8, 9, 11, 12, 13, 14, 15], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 4, // dòng của tiêu đề nằm ngang
     // columnVertical: 0, // stt cột lấy màu bị hàng dọc
     // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
     // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
   },
-  {
-    id: 12,
-    type: "chdv",
-    address_column: [1],
-    room_column: [3],
-    building_code_column: [null],
-    price_column: [4],
-    name: "link12_dp chính chủ",
-    if: "caocap",
-    web: "12 dp house_chính chủ",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=833885440#gid=833885440",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [833885440], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: [], // tên từ muốn lọc
-    exitColumn: 5, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 6, // trường này là trường link driver
-    column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 7, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-  {
-    id: 12,
-    type: "chdv",
-    address_column: [1],
-    room_column: [3],
-    building_code_column: [null],
-    price_column: [4],
-    name: "link12_dp chính chủ",
-    if: "caocap",
-    web: "12 dp house_chính chủ",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=1795680526#gid=1795680526",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [1795680526], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: [], // tên từ muốn lọc
-    exitColumn: 5, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 6, // trường này là trường link driver
-    column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 7, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-  {
-    id: 12,
-    type: "chdv",
-    address_column: [1],
-    room_column: [3],
-    building_code_column: [null],
-    price_column: [4],
-    name: "link12_dp chính chủ",
-    if: "caocap",
-    web: "12 dp house_chính chủ",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=1453241145#gid=1453241145",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [1453241145], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: [], // tên từ muốn lọc
-    exitColumn: 5, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 6, // trường này là trường link driver
-    column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 7, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-  {
-    id: 12,
-    type: "chdv",
-    address_column: [1],
-    room_column: [3],
-    building_code_column: [null],
-    price_column: [4],
-    name: "link12_dp chính chủ",
-    if: "caocap",
-    web: "12 dp house_chính chủ",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=91148695#gid=91148695",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [91148695], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: [], // tên từ muốn lọc
-    exitColumn: 5, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 6, // trường này là trường link driver
-    column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 7, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-  {
-    id: 12,
-    type: "chdv",
-    address_column: [1],
-    room_column: [3],
-    building_code_column: [null],
-    price_column: [4],
-    name: "link12_dp chính chủ",
-    if: "caocap",
-    web: "12 dp house_chính chủ",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=1972585217#gid=1972585217",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [1972585217], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: [], // tên từ muốn lọc
-    exitColumn: 5, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 6, // trường này là trường link driver
-    column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 7, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-  {
-    id: 12,
-    type: "chdv",
-    address_column: [1],
-    room_column: [3],
-    building_code_column: [null],
-    price_column: [4],
-    name: "link12_dp chính chủ",
-    if: "caocap",
-    web: "12 dp house_chính chủ",
-    link: "https://docs.google.com/spreadsheets/d/1vqcP0X7UcfcibNqZdJXbEOOK2MW7aaUriPcWAk7Mz44/edit?gid=550482154#gid=550482154",
-    // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [550482154], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
-    exit: [], // tên từ muốn lọc
-    exitColumn: 5, // trường này là trường trạng thái loại trừ
-    exitLinkDriver: 6, // trường này là trường link driver
-    column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 7, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
-  },
-
+  // {
+  //   id: 12.1,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [3],
+  // building_code_column: [null],
+  // price_column: [4],
+  //   name: "link12_dp thanh xuân",
+  //   if: "caocap",
+  //   web: "12 dp house_thanh xuân",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=544527768#gid=",
+  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //   list_address: [544527768],
+  //   exit: [],
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ
+  //   exitLinkDriver: 6, // trường này là trường link driver
+  //   column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  // },
+  // {
+  //   id: 12.2,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [3],
+  // building_code_column: [null],
+  // price_column: [4],
+  //   name: "link12_dp cầu giấy",
+  //   if: "caocap",
+  //   web: "12 dp house_cầu giấy",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1621362109#gid=",
+  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //   list_address: [1621362109],
+  //   exit: [],
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ
+  //   exitLinkDriver: 6, // trường này là trường link driver
+  //   column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  // },
+  // {
+  //   id: 12.3,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [3],
+  // building_code_column: [null],
+  // price_column: [4],
+  //   name: "link12_dp tây hồ",
+  //   if: "caocap",
+  //   web: "12 dp house_tây hồ",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1522133869#gid=",
+  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //   list_address: [1522133869],
+  //   exit: [],
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ
+  //   exitLinkDriver: 6, // trường này là trường link driver
+  //   column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  // },
+  // {
+  //   id: 12.4,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [3],
+  // building_code_column: [null],
+  // price_column: [4],
+  //   name: "link12_dp đống đa",
+  //   if: "caocap",
+  //   web: "12 dp house_đống đa",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=366590607#gid=",
+  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //   list_address: [366590607],
+  //   exit: [],
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ
+  //   exitLinkDriver: 6, // trường này là trường link driver
+  //   column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  // },
+  // {
+  //   id: 12.5,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [3],
+  // building_code_column: [null],
+  // price_column: [4],
+  //   name: "link12_dp ba đình",
+  //   if: "caocap",
+  //   web: "12 dp house_ba đình",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=803977028#gid=",
+  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //   list_address: [803977028],
+  //   exit: [],
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ
+  //   exitLinkDriver: 6, // trường này là trường link driver
+  //   column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  // },
+  // {
+  //   id: 12.6,
+  // type: "chdv",
+  // address_column: [1],
+  // room_column: [3],
+  // building_code_column: [null],
+  // price_column: [4],
+  //   name: "link12_dp hoàng mai",
+  //   if: "caocap",
+  //   web: "12 dp house_hoàng mai",
+  //   link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1396622785#gid=",
+  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+  //   list_address: [1396622785],
+  //   exit: [],
+  //   exitColumn: null, // trường này là trường trạng thái loại trừ
+  //   exitLinkDriver: 6, // trường này là trường link driver
+  //   column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+  // },
   {
     id: 13,
     type: "chdv",
@@ -817,7 +789,7 @@
     name: "13 sunny",
     if: "caocap",
     web: "13 sunny",
-    link: "https://docs.google.com/spreadsheets/d/1CkB-p98Wwodc1cQvG7Oxgp5qlf9kkZxgXt-iyJQdlOw/edit?sharingaction=ownershiptransfer&gid=0#gid=0",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=361046971#gid=361046971",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [0], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -828,7 +800,7 @@
     exitLinkDriver: 6, // trường này là trường link driver để tải ảnh về
     column: [1, 7, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 3, 9, 10, 11, 12, 14, 15, 16, 17], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota: [2, 3, 9, 10, 11, 12, 14, 15, 16], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 4, // dòng của tiêu đề nằm ngang
     // columnVertical: 0, // stt cột lấy màu bị hàng dọc
     // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
@@ -984,7 +956,7 @@
     name: "18 bq home",
     if: "caocap",
     web: "18 bq home",
-    link: "https://docs.google.com/spreadsheets/d/1r9Oz6aeUzOwe2t5LMUmz9-DuSn5WbljkZo7fC6OEGRY/edit?gid=0#gid=0",
+    link: "https://docs.google.com/spreadsheets/d/1o6XnscEBJ0qThKCJbJMzqbeCtYKBB-C7GDRZchpvM8k/edit?gid=168752209#gid=168752209",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [0], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -995,7 +967,7 @@
     exitLinkDriver: 6, // trường này là trường link driver để tải ảnh về
     column: [1, 3, null, 2], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [3, 4], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota: [5, 6, 3, 4], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 3, // dòng của tiêu đề nằm ngang
     // columnVertical: 0, // stt cột lấy màu bị hàng dọc
     // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
@@ -1003,27 +975,27 @@
   },
   {
     id: 19,
-    type: "chdv",
-    address_column: [3],
-    room_column: [2],
-    building_code_column: [null],
-    price_column: [11],
+  type: "chdv",
+  address_column: [3],
+  room_column: [2],
+  building_code_column: [null],
+  price_column: [12],
     name: "19 airstay",
     if: "caocap",
     web: "19 airstay",
     link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=721978481#gid=721978481",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [721978481], /// có nhiều id khác nhau
-    //   exitBackgroundColor: [], // màu nền ô muốn lọc
-    //   exitTextColor: null, // màu chữ muốn lọc
-    //   exitColumnColor: null, // cột màu muốn lọc
+    list_address: [0], /// có nhiều id khác nhau
+   //   exitBackgroundColor: [], // màu nền ô muốn lọc
+  //   exitTextColor: null, // màu chữ muốn lọc
+  //   exitColumnColor: null, // cột màu muốn lọc
     exit: [], // từ muốn lọc trống kín
-    exitColumn: 5, // cột để loại trừ trống kín
-    exitLinkDriver: 6, // trường này là trường link driver để tải ảnh về
-    column: [3, 2, null, 11], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+    exitColumn: 6, // cột để loại trừ trống kín
+    exitLinkDriver: 0, // trường này là trường link driver để tải ảnh về
+    column: [1, 3, null, 2], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [5, 8, 9, 10, 13, 14], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 0, // dòng của tiêu đề nằm ngang
+    mota: [9,10,11,14,15], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+     header: 0, // dòng của tiêu đề nằm ngang
     // columnVertical: 0, // stt cột lấy màu bị hàng dọc
     // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
     // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
@@ -1868,7 +1840,7 @@
     name: "48 dd",
     if: "caocap",
     web: "48 dd",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=77508200#gid=77508200",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [77508200], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -1895,7 +1867,7 @@
     name: "48 cg",
     if: "caocap",
     web: "48 cg",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=106711673#gid=106711673",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [106711673], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -1922,7 +1894,7 @@
     name: "48 bd",
     if: "caocap",
     web: "48 bd",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=293878217#gid=293878217",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [293878217], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -1949,7 +1921,7 @@
     name: "48 tx",
     if: "caocap",
     web: "48 tx",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1583965584#gid=1583965584",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [1583965584], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -1976,7 +1948,7 @@
     name: "48 hbt",
     if: "caocap",
     web: "48 hbt",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=873208498#gid=873208498",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [873208498], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2003,7 +1975,7 @@
     name: "48 hm",
     if: "caocap",
     web: "48 hm",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=452880823#gid=452880823",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [452880823], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2030,7 +2002,7 @@
     name: "48 hd",
     if: "caocap",
     web: "48 hd",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=556045727#gid=556045727",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [556045727], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2057,7 +2029,7 @@
     name: "48 hk",
     if: "caocap",
     web: "48 hk",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=172952590#gid=172952590",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [172952590], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2084,7 +2056,7 @@
     name: "48 th",
     if: "caocap",
     web: "48 th",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=263710512#gid=263710512",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [263710512], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2111,7 +2083,7 @@
     name: "48 btl",
     if: "caocap",
     web: "48 btl",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2008534888#gid=2008534888",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [2008534888], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2138,7 +2110,7 @@
     name: "49 roc huy thuý",
     if: "caocap",
     web: "49 roc land hiếu",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1169888182#gid=1169888182",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=172406471#gid=172406471",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2165,7 +2137,7 @@
     name: "49 roc land l,m,h",
     if: "caocap",
     web: "49 roc land l,m,h",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1824187440#gid=1824187440",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2037252532#gid=2037252532",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2192,7 +2164,7 @@
     name: "49 roc land mach ha",
     if: "caocap",
     web: "49 roc land mach ha",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=738246706#gid=738246706",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1579716550#gid=1579716550",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2219,7 +2191,7 @@
     name: "49 roc land mach kien",
     if: "caocap",
     web: "49 roc land mach kien",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=943926320#gid=943926320",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=569977053#gid=569977053",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2246,7 +2218,7 @@
     name: "49 roc land Thông",
     if: "caocap",
     web: "49 roc land HT",
-    link: "https://docs.google.com/spreadsheets/d/1Op_T0IbYnYQbumTt1q68p5PxXydTwwXejiFHru60zk4/edit?gid=848835541#gid=848835541",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=161078015#gid=161078015",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2588,7 +2560,7 @@
     name: "68 real home",
     if: "caocap",
     web: "68 real home",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=212223897#gid=212223897",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1619786272#gid=1619786272",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -2665,23 +2637,23 @@
     address_column: [1],
     room_column: [2],
     building_code_column: [null],
-    price_column: [3],
+    price_column: [5],
     name: "72 nic",
     if: "caocap",
-    web: "72 nic chdv",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1487672531#gid=1487672531",
+    web: "72 night vp",
+    link: "https://docs.google.com/spreadsheets/d/1gfdzykbe_Qbw-Mn8LEIHgwrZNamBHFQJfV6r8sw17DQ/edit?copiedFromTrash=&gid=0#gid=0",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
     exit: [], // từ muốn lọc trống kín
-    exitColumn: 5, // cột để loại trừ trống kín
-    exitLinkDriver: 3, // trường này là trường link driver để tải ảnh về
+    exitColumn: 4, // cột để loại trừ trống kín
+    exitLinkDriver: 8, // trường này là trường link driver để tải ảnh về
     column: [1, 2, null, 3], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [4, 5, 6, 7, 8, 9, 10, 11], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 2, // dòng của tiêu đề nằm ngang
+    mota: [9], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    header: 0, // dòng của tiêu đề nằm ngang
     //         columnVertical: 1, // stt ô lấy màu bị hàng dọc
     //         colorExitVerticalBg: "#ffff00ff", // màu ô chuyển bảng hàng dọc thành ngang
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
@@ -2715,7 +2687,7 @@
     name: "74",
     if: "caocap",
     web: "74 a đức ",
-    link: "https://docs.google.com/spreadsheets/d/1o6XnscEBJ0qThKCJbJMzqbeCtYKBB-C7GDRZchpvM8k/edit?gid=2142017645#gid=2142017645",
+    link: "https://docs.google.com/spreadsheets/d/1o6XnscEBJ0qThKCJbJMzqbeCtYKBB-C7GDRZchpvM8k/edit?gid=501717910#gid=501717910",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
@@ -3257,7 +3229,7 @@
     name: "91 e.dương",
     if: "caocap",
     web: "91 e.dương",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?pli=1&gid=1255255684#gid=1255255684",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=972974386#gid=972974386",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -3518,7 +3490,7 @@
     name: "106 trọ xinh",
     if: "caocap",
     web: "106 trọ xinh",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1480272388#gid=1480272388",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1754279088#gid=1754279088",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -3545,7 +3517,7 @@
     name: "108 ting tong",
     if: "caocap",
     web: "108 ting tong",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1303441719#gid=1303441719",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1603197602#gid=1603197602",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -3718,7 +3690,7 @@
     name: "112 an bình",
     if: "caocap",
     web: "112 an bình",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=108701514#gid=108701514",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1444771447#gid=1444771447",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -3799,7 +3771,7 @@
     name: "116 thiên minh",
     if: "caocap",
     web: "116 thiên minh",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1350451961#gid=1350451961",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1366549984",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -3935,7 +3907,7 @@
     name: "122 comi",
     if: "caocap",
     web: "122 comi",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=534212634#gid=534212634",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=763245064",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [534212634], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -4062,7 +4034,7 @@
     name: "128 cema",
     if: "caocap",
     web: "128 cema",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1334871570#gid=1334871570",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?pli=1&gid=839104890#gid=839104890",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -4190,7 +4162,7 @@
     name: "133 suha",
     if: "caocap",
     web: "133 suha",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1621025115#gid=1621025115",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1617146229#gid=1617146229",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -4363,7 +4335,7 @@
     name: "141 full house",
     if: "caocap",
     web: "141 full house",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1518772005",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1518772005#gid=1518772005",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -4470,7 +4442,7 @@
     name: "145 e home",
     if: "caocap",
     web: "145 e home",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1258622916#gid=1258622916",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=233102750#gid=233102750",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -6356,7 +6328,7 @@
     name: "246 - Hạnh 0376977777 cầu giấy+ nam từ liêm  ",
     if: "caocap",
     web: "246 - Hạnh 0376977777 cầu giấy+ nam từ liêm    ",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=110681126#gid=110681126",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=841676236#gid=841676236",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: "FF0000", // màu nền ô muốn lọc
@@ -8335,7 +8307,7 @@
     name: "350: l.anh chdv ",
     if: "caocap",
     web: "350: l.anh chdv    ",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1113619934#gid=1113619934",
+    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2106760034#gid=2106760034",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
     //  exitBackgroundColor: ""FF0000"", // màu nền ô muốn lọc
