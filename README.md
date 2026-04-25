@@ -212,12 +212,18 @@ Run once:
 npm run run:all
 ```
 
+Shortcut command (same behavior, easier to remember):
+
+```bash
+npm run run:trong-kin-then-room-audit
+```
+
 Preset:
 
 - Task name: `ToolUpdateRoom-All-Daily`
 - Entry script: `scripts/run-all-daily.js`
 - Log prefix: `all-run`
-- Flow order: `trong-kin` first, `room audit` second
+- Flow order: `trong-kin` first, `room audit` second (sequential, not parallel)
 - Script arg mặc định:
   - `room-audit` gửi Telegram + sync sheet theo format II.A/II.B
 
@@ -343,14 +349,14 @@ npm run audit:room -- --rule1-hours=12
 - `--use-api=true|false`: enable or disable API enrichment.
 - `--limit=10`: stop after a specific number of audit rows.
 - `--rule1-hours=24`: change the stale threshold for Rule 1.
-- `--test-errors=1,2,3...9`: chỉ chạy test các nhóm lỗi được chọn (1=II.A.1, 2=II.A.2, 3=II.A.3, 4=II.B.4, ..., 9=II.B.9).
+- `--test-errors=1,2,3...11`: chỉ chạy test các nhóm lỗi được chọn (1=II.A.1, 2=II.A.2, 3=II.A.3, 4=II.B.4, ..., 9=II.B.9, 10=II.B.10, 11=II.B.11).
 - `--send-telegram=true|false`: gửi hoặc tắt gửi Telegram room-audit.
 - `--sync-report-sheet=true|false`: ghi hoặc tắt ghi Google Sheet báo cáo room-audit.
 - `--report-sheet-spreadsheet-id=...`: override spreadsheet báo cáo (mặc định của chú).
 - `--report-sheet-gid=297377874`: override sheet gid báo cáo.
 - `--report-sheet-header-row=1`: hàng chứa ngày.
 - `--report-sheet-first-data-row=2`: hàng bắt đầu ghi dữ liệu.
-- `--report-sheet-last-data-row=11`: hàng kết thúc ghi dữ liệu.
+- `--report-sheet-last-data-row=13`: hàng kết thúc ghi dữ liệu.
 - `--report-sheet-start-column=7`: cột ngày đầu tiên (7 = G).
 - `--report-sheet-day-window-size=8`: chỉ dùng tối đa 8 cột ngày; đầy vòng sẽ quay về cột bắt đầu để ghi đè.
 - `--openclaw-workspace-dir="C:/path/to/workspace"`: override the OpenClaw copy target for this run only.

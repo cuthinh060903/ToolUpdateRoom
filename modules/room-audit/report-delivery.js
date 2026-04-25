@@ -2,13 +2,15 @@ const fs = require("fs");
 const path = require("path");
 const { google } = require("googleapis");
 const { sendTelegramMessage } = require("../../telegram_bot");
+const { LIST_GGSHEET } = require("../../constants");
+const { filterCode3SourceErrors } = require("./source-error-filter");
 
 const DEFAULT_REPORT_SHEET = {
   spreadsheetId: "11EyNOVAMn7ei-J8svcMjpvv1B7AashTUDyRB-gUeHho",
   sheetGid: 297377874,
   headerRow: 1,
   firstDataRow: 2,
-  lastDataRow: 11,
+  lastDataRow: 13,
   firstDayColumn: 7,
   dayColumnWindowSize: 8,
 };
@@ -16,15 +18,14 @@ const DEFAULT_REPORT_SHEET = {
 const ADDRESS_FIELD_REASONS = new Set(["ADDRESS_MISSING"]);
 // II.B.5 = setup "tên phòng" column smells wrong. Do not use ROOM_NOT_MATCHED_* (API/sync)
 // or ROOM_NAME_MISSING (empty row) — those are not column-misalignment signals.
-const ROOM_NAME_FIELD_REASONS = new Set([
-  "ROOM_NAME_LOOKS_LIKE_PRICE",
-]);
+const ROOM_NAME_FIELD_REASONS = new Set(["ROOM_NAME_LOOKS_LIKE_PRICE"]);
 const PRICE_FIELD_REASONS = new Set([
   "PRICE_UNPARSEABLE",
   "PRICE_LOOKS_LIKE_ROOM_NAME",
 ]);
 const NO_IMAGE_REASONS = new Set(["IMAGE_COUNT_ZERO"]);
 const NEW_BUILDING_LOG_FILES = ["nhamoi.txt", "khongcodulieu.txt"];
+const CDT_CONFIG_FILE = "constants.js";
 
 function normalizeText(value) {
   if (value === null || value === undefined) {
@@ -50,7 +51,9 @@ function isPlainNumberString(value = "") {
 }
 
 function stripTrailingCurrencySuffix(value = "") {
-  return normalizeText(value).replace(/(?:\s*[d\u0111])+\s*$/i, "").trim();
+  return normalizeText(value)
+    .replace(/(?:\s*[d\u0111])+\s*$/i, "")
+    .trim();
 }
 
 function isLikelyRoomCodeList(value = "") {
@@ -93,7 +96,10 @@ function isLikelyRoomPriceCombinedCell(value = "") {
     return false;
   }
 
-  const segments = text.split(",").map((segment) => segment.trim()).filter(Boolean);
+  const segments = text
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
   for (const segment of segments) {
     if (!segment.includes("-")) {
       continue;
@@ -138,7 +144,6 @@ function isPriceLikeRoomField(value = "") {
 
   return looksLikePriceText(text);
 }
-
 
 function toBoolean(value, fallback = false) {
   if (value === undefined || value === null || value === "") {
@@ -295,7 +300,7 @@ function collectLikelyNoVacantCdtIds(report = {}) {
 }
 
 function buildNoVacantLine(report = {}) {
-  return `II.A.2: C\u00e1c C\u0110T kh\u00f4ng c\u00f3 ph\u00f2ng tr\u1ed1ng: ${cdtListText(
+  return `II.A.2: Các CĐT có phòng trống bằng 0: ${cdtListText(
     collectLikelyNoVacantCdtIds(report),
   )}`;
 }
@@ -309,7 +314,11 @@ function extractLogDateParts(line = "") {
   const day = Number(match[1]);
   const month = Number(match[2]);
   const year = Number(match[3]);
-  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
+  if (
+    !Number.isFinite(day) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(year)
+  ) {
     return null;
   }
 
@@ -508,18 +517,105 @@ function collectNewBuildingCdtIds(report = {}, now = new Date()) {
   return [...cdtIds];
 }
 
+function collectClosedToolCdtIds() {
+  const lines = readWorkspaceLogLines(CDT_CONFIG_FILE);
+  const activeIds = new Set();
+  const commentedIds = new Set();
+
+  lines.forEach((line) => {
+    const text = normalizeText(line);
+    if (!text) {
+      return;
+    }
+
+    const activeMatch = text.match(/^id\s*:\s*(-?\d+(?:\.\d+)?)/i);
+    if (activeMatch) {
+      activeIds.add(activeMatch[1]);
+      return;
+    }
+
+    const commentedMatch = text.match(
+      /^\/\/+\s*(?:\/\/+\s*)?id\s*:\s*(-?\d+(?:\.\d+)?)/i,
+    );
+    if (commentedMatch) {
+      commentedIds.add(commentedMatch[1]);
+    }
+  });
+
+  return [...commentedIds].filter((id) => !activeIds.has(id));
+}
+
+function hasConfiguredField(value) {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => hasConfiguredField(item));
+  }
+  return normalizeText(value) !== "";
+}
+
+function hasLegacyColumnConfig(config = {}, index = -1) {
+  const legacyColumns = Array.isArray(config?.column) ? config.column : [];
+  if (index < 0 || index >= legacyColumns.length) {
+    return false;
+  }
+  return hasConfiguredField(legacyColumns[index]);
+}
+
+function isMissingRequiredSheetStructure(config = {}) {
+  const hasAddressField =
+    hasConfiguredField(config?.address_column) || hasLegacyColumnConfig(config, 0);
+  const hasRoomField =
+    hasConfiguredField(config?.room_column) || hasLegacyColumnConfig(config, 1);
+  const hasPriceField =
+    hasConfiguredField(config?.price_column) || hasLegacyColumnConfig(config, 3);
+  const hasImageField = hasConfiguredField(config?.exitLinkDriver);
+  const hasDescriptionField = hasConfiguredField(config?.mota);
+
+  return (
+    !hasAddressField ||
+    !hasRoomField ||
+    !hasPriceField ||
+    !hasImageField ||
+    !hasDescriptionField
+  );
+}
+
+function collectIncompleteStructureCdtIds() {
+  const cdtIds = new Set();
+  const configs = Array.isArray(LIST_GGSHEET) ? LIST_GGSHEET : [];
+
+  configs.forEach((config) => {
+    if (config?.id === null || config?.id === undefined) {
+      return;
+    }
+
+    if (isMissingRequiredSheetStructure(config)) {
+      cdtIds.add(config.id);
+    }
+  });
+
+  return [...cdtIds];
+}
 
 function buildTelegramAndSheetLines(report, now = new Date()) {
   const labels = getCurrentDateLabels(now);
   const rows = Array.isArray(report?.rows) ? report.rows : [];
-  const sourceErrors = Array.isArray(report?.source_errors)
+  const sourceErrorsRaw = Array.isArray(report?.source_errors)
     ? report.source_errors
     : [];
+  const sourceErrors = filterCode3SourceErrors(sourceErrorsRaw);
   const toolRan = Boolean(
-    report?.tool_status?.ran || rows.length > 0 || sourceErrors.length > 0,
+    report?.tool_status?.ran || rows.length > 0 || sourceErrorsRaw.length > 0,
   );
   const selectedErrorCodes = new Set(
-    Array.isArray(report?.selected_test_errors) ? report.selected_test_errors : [],
+    Array.isArray(report?.selected_test_errors)
+      ? report.selected_test_errors
+      : [],
   );
   const isTestFilterEnabled = selectedErrorCodes.size > 0;
   const nonSelectedText = "Không chạy test lỗi này";
@@ -534,9 +630,7 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
           )}`
         : "II.A.1: Tool không chạy. Tổng phòng trống: 0"
       : `II.A.1: ${nonSelectedText}`,
-    includeError(2)
-      ? buildNoVacantLine(report)
-      : `II.A.2: ${nonSelectedText}`,
+    includeError(2) ? buildNoVacantLine(report) : `II.A.2: ${nonSelectedText}`,
     includeError(3)
       ? `II.A.3: Các CĐT bị lỗi link bảng hàng đích: ${cdtListText(
           sourceErrors.map((item) => item?.cdt_id),
@@ -544,22 +638,30 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
       : `II.A.3: ${nonSelectedText}`,
     includeError(4)
       ? `II.B.4: Các CĐT bị lệch cột "địa chỉ" ở setup tool: ${cdtListText(
-          rows.filter((row) => isAddressColumnError(row)).map((row) => row.cdt_id),
+          rows
+            .filter((row) => isAddressColumnError(row))
+            .map((row) => row.cdt_id),
         )}`
       : `II.B.4: ${nonSelectedText}`,
     includeError(5)
       ? `II.B.5: Các CĐT bị lệch cột "tên phòng" ở setup tool: ${cdtListText(
-          rows.filter((row) => isRoomNameColumnError(row)).map((row) => row.cdt_id),
+          rows
+            .filter((row) => isRoomNameColumnError(row))
+            .map((row) => row.cdt_id),
         )}`
       : `II.B.5: ${nonSelectedText}`,
     includeError(6)
       ? `II.B.6: Các CĐT bị lệch cột "giá" ở setup tool: ${cdtListText(
-          rows.filter((row) => isPriceColumnError(row)).map((row) => row.cdt_id),
+          rows
+            .filter((row) => isPriceColumnError(row))
+            .map((row) => row.cdt_id),
         )}`
       : `II.B.6: ${nonSelectedText}`,
     includeError(7)
       ? `II.B.7: Các CĐT bị lệch cột "link ảnh" ở setup tool: ${cdtListText(
-          rows.filter((row) => isImageColumnError(row)).map((row) => row.cdt_id),
+          rows
+            .filter((row) => isImageColumnError(row))
+            .map((row) => row.cdt_id),
         )}`
       : `II.B.7: ${nonSelectedText}`,
     includeError(8)
@@ -574,6 +676,14 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
           collectNewBuildingCdtIds(report, now),
         )}`
       : `II.B.9: ${nonSelectedText}`,
+    includeError(10)
+      ? `II.B.10: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
+      : `II.B.10: ${nonSelectedText}`,
+    includeError(11)
+      ? `II.B.11: Các CĐT có cấu trúc bảng không đầy đủ: ${cdtListText(
+          collectIncompleteStructureCdtIds(),
+        )}`
+      : `II.B.11: ${nonSelectedText}`,
   ];
 
   return {
@@ -747,6 +857,72 @@ async function syncReportSheet(reportPayload, options = {}) {
   };
 }
 
+function splitLongTelegramMessage(message = "", maxLength = 3500) {
+  const text = normalizeText(message);
+  if (!text) {
+    return [];
+  }
+
+  if (!Number.isFinite(maxLength) || maxLength <= 0 || text.length <= maxLength) {
+    return [text];
+  }
+
+  const labeledListMatch = text.match(/^(II\.[AB]\.\d+:\s*)(.+)$/s);
+  if (labeledListMatch) {
+    const prefix = labeledListMatch[1];
+    const body = labeledListMatch[2];
+    const tokens = body
+      .split(/,\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (tokens.length > 1) {
+      const chunks = [];
+      let current = prefix;
+      let currentPrefix = prefix;
+
+      tokens.forEach((token) => {
+        const addition =
+          current === currentPrefix ? token : `, ${token}`;
+        if ((current + addition).length > maxLength) {
+          chunks.push(current);
+          currentPrefix = `${prefix.trim()} (tiếp): `;
+          current = `${currentPrefix}${token}`;
+          return;
+        }
+
+        current += addition;
+      });
+
+      if (current) {
+        chunks.push(current);
+      }
+      if (chunks.length > 0) {
+        return chunks;
+      }
+    }
+  }
+
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > maxLength) {
+    let splitIndex = remaining.lastIndexOf("\n", maxLength);
+    if (splitIndex < Math.floor(maxLength * 0.5)) {
+      splitIndex = remaining.lastIndexOf(" ", maxLength);
+    }
+    if (splitIndex < Math.floor(maxLength * 0.5)) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(remaining.slice(0, splitIndex).trim());
+    remaining = remaining.slice(splitIndex).trim();
+  }
+  if (remaining) {
+    chunks.push(remaining);
+  }
+
+  return chunks.length > 0 ? chunks : [text];
+}
+
 async function sendTelegramMessages(reportPayload, options = {}) {
   if (!toBoolean(options.sendTelegram, true)) {
     return {
@@ -757,23 +933,33 @@ async function sendTelegramMessages(reportPayload, options = {}) {
     };
   }
 
+  const maxTelegramMessageLength = Number.isFinite(options?.telegramMaxLength)
+    ? Math.max(500, Number(options.telegramMaxLength))
+    : 3500;
+
   let sentCount = 0;
   for (const message of reportPayload.messages) {
-    const result = await sendTelegramMessage(message, {
-      targetKey: "roomAudit",
-      parseMode: null,
-      maxAttempts: 3,
-      retryBaseMs: 1500,
-    });
-    if (!result.sent) {
-      return {
-        sent: false,
-        stage: "report",
-        reason: result.reason || "REPORT_MESSAGE_FAILED",
-        count: sentCount,
-      };
+    const messageParts = splitLongTelegramMessage(
+      message,
+      maxTelegramMessageLength,
+    );
+    for (const messagePart of messageParts) {
+      const result = await sendTelegramMessage(messagePart, {
+        targetKey: "roomAudit",
+        parseMode: null,
+        maxAttempts: 3,
+        retryBaseMs: 1500,
+      });
+      if (!result.sent) {
+        return {
+          sent: false,
+          stage: "report",
+          reason: result.reason || "REPORT_MESSAGE_FAILED",
+          count: sentCount,
+        };
+      }
+      sentCount += 1;
     }
-    sentCount += 1;
   }
 
   return {

@@ -13,6 +13,7 @@
     "run:trong-kin": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-daily.ps1 -EntryScript \"index.js\" -LogPrefix \"trong-kin-run\"",
     "run:room-audit": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-daily.ps1 -EntryScript \"modules/room-audit/index.js\" -LogPrefix \"room-audit-run\"",
     "run:all": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run-daily.ps1 -EntryScript \"scripts/run-all-daily.js\" -LogPrefix \"all-run\"",
+    "run:trong-kin-then-room-audit": "npm run run:all",
     "schedule:daily": "powershell -ExecutionPolicy Bypass -File .\\scripts\\register-daily-task.ps1 -TaskName \"ToolUpdateRoom-TrongKin-Daily\" -EntryScript \"index.js\" -LogPrefix \"trong-kin-run\"",
     "schedule:daily:room-audit": "powershell -ExecutionPolicy Bypass -File .\\scripts\\register-daily-task.ps1 -TaskName \"ToolUpdateRoom-RoomAudit-Daily\" -EntryScript \"modules/room-audit/index.js\" -LogPrefix \"room-audit-run\"",
     "schedule:stop": "powershell -ExecutionPolicy Bypass -File .\\scripts\\stop-daily-task.ps1 -TaskName \"ToolUpdateRoom-TrongKin-Daily\"",

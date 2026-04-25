@@ -13,6 +13,7 @@ const {
   applyRootCauseClassification,
   summarizeRootCauses,
 } = require("./classify-root-cause");
+const { filterCode3SourceErrors } = require("./source-error-filter");
 
 const BUSINESS_CONCLUSION = ROOT_CAUSE;
 
@@ -612,50 +613,6 @@ function buildTechnicalReport(report, options = {}) {
   return lines.join("\n");
 }
 
-function formatToolStatusLabel(status = "", ran = true) {
-  if (!ran) {
-    return "CHƯA GHI NHẬN TOOL ĐÃ CHẠY";
-  }
-
-  if (status === "OK") {
-    return "ĐÃ CHẠY, BÌNH THƯỜNG";
-  }
-
-  if (status === "WARNING") {
-    return "ĐÃ CHẠY, CÓ CẢNH BÁO";
-  }
-
-  if (status === "ERROR") {
-    return "ĐÃ CHẠY, CÓ LỖI";
-  }
-
-  if (status === "NO_DATA") {
-    return "ĐÃ CHẠY, KHÔNG CÓ DỮ LIỆU";
-  }
-
-  return "ĐÃ CHẠY, CHƯA XÁC ĐỊNH";
-}
-
-function formatCdtStatusLabel(status = "") {
-  if (status === "OK") {
-    return "ON";
-  }
-
-  if (status === "WARNING") {
-    return "CÓ CẢNH BÁO";
-  }
-
-  if (status === "ERROR") {
-    return "LỖI";
-  }
-
-  if (status === "NO_DATA") {
-    return "KHÔNG CÓ DỮ LIỆU";
-  }
-
-  return "CHƯA XÁC ĐỊNH";
-}
-
 const BUSINESS_REASON_LABELS = {
   ADDRESS_MISMATCH_LOGGED: "Lệch địa chỉ",
   BUILDING_NOT_FOUND: "Không tìm thấy tòa nhà",
@@ -773,18 +730,6 @@ const IMAGE_CHECK_UNKNOWN_REASONS = new Set([
   "IMAGE_LINK_404",
 ]);
 
-const CODE_5_REASONS = new Set([
-  ...ADDRESS_BUILDING_REASONS,
-  ...ROOM_STATUS_REASONS,
-  "ADDRESS_MISSING",
-  "ROOM_NAME_MISSING",
-  "ROOM_NAME_LOOKS_LIKE_PRICE",
-  "WEB_ROOM_NAME_LOOKS_LIKE_PRICE",
-  "PRICE_UNPARSEABLE",
-  "PRICE_LOOKS_LIKE_ROOM_NAME",
-  "GGSHEET_LOGGED_ERROR",
-]);
-
 const CODE_7_REASONS = new Set([
   ...IMAGE_CHECK_UNKNOWN_REASONS,
   "IMAGE_COUNT_ZERO",
@@ -809,10 +754,6 @@ function matchesRoomStatusReason(reason = "") {
 
 function matchesImageCheckUnknownReason(reason = "") {
   return IMAGE_CHECK_UNKNOWN_REASONS.has(reason);
-}
-
-function matchesCode5Reason(reason = "") {
-  return CODE_5_REASONS.has(reason);
 }
 
 function matchesCode7Reason(reason = "") {
@@ -994,92 +935,6 @@ function collectSuggestedActionKeys({
   );
 }
 
-function buildSuggestedActionLines(report) {
-  const suggestions = collectSuggestedActionKeys({
-    reasonEntries: report.reason_summary,
-    roomsWithoutImages: report.total_rooms_without_images,
-    roomsWithoutImagesUnknown: report.total_rooms_without_images_unknown,
-    includeUpdatedAt: true,
-  });
-
-  const lines = ["Hướng xử lý đề xuất:"];
-  if (suggestions.length === 0) {
-    lines.push(
-      "- Không có hướng xử lý đề xuất vì không ghi nhận lỗi business nổi bật."
-    );
-    return lines;
-  }
-
-  suggestions.forEach((item) => {
-    lines.push(`- ${item.label}: ${item.summaryText}.`);
-  });
-
-  return lines;
-}
-
-function buildCdtSuggestedActionText(group) {
-  const suggestions = collectSuggestedActionKeys({
-    reasonEntries: group.top_update_error_reasons,
-    roomsWithoutImages: group.rooms_without_images,
-    roomsWithoutImagesUnknown: group.rooms_without_images_unknown,
-    includeUpdatedAt: false,
-  });
-
-  if (suggestions.length === 0) {
-    return "";
-  }
-
-  return suggestions
-    .slice(0, 3)
-    .map((item) => item.cdtText)
-    .join("; ");
-}
-
-function buildIssueGroupsByCdt(rows = [], matcher = () => false) {
-  const groups = new Map();
-
-  rows.forEach((row) => {
-    const matchedReasons = (row.error_detail || []).filter((reason) =>
-      matcher(reason, row)
-    );
-    if (matchedReasons.length === 0) {
-      return;
-    }
-
-    const key = buildCdtGroupKey(row.cdt_id, row.cdt_name);
-    if (!groups.has(key)) {
-      groups.set(key, {
-        cdt_id: row.cdt_id,
-        cdt_name: row.cdt_name,
-        affected_rows: 0,
-        reasons: [],
-      });
-    }
-
-    const group = groups.get(key);
-    group.affected_rows += 1;
-    group.reasons.push(...matchedReasons);
-  });
-
-  return [...groups.values()]
-    .map((group) => ({
-      cdt_id: group.cdt_id,
-      cdt_name: group.cdt_name,
-      affected_rows: group.affected_rows,
-      reasons: countValueOccurrences(group.reasons).map((item) => ({
-        reason: item.value,
-        count: item.count,
-      })),
-    }))
-    .sort((a, b) => {
-      if (b.affected_rows !== a.affected_rows) {
-        return b.affected_rows - a.affected_rows;
-      }
-
-      return String(a.cdt_id ?? "").localeCompare(String(b.cdt_id ?? ""));
-    });
-}
-
 function buildCode4Detection(rows = []) {
   const evidenceByAddress = new Map();
 
@@ -1183,47 +1038,6 @@ function buildCode4Detection(rows = []) {
         return String(a.cdt_id ?? "").localeCompare(String(b.cdt_id ?? ""));
       }),
   };
-}
-
-function buildSummaryDrivenIssueGroups(
-  summaryGroups = [],
-  rows = [],
-  countSelector = () => 0,
-  reasonMatcher = () => false
-) {
-  const reasonGroups = buildIssueGroupsByCdt(rows, reasonMatcher);
-  const reasonMap = new Map(
-    reasonGroups.map((group) => [
-      buildCdtGroupKey(group.cdt_id, group.cdt_name),
-      group,
-    ])
-  );
-
-  return summaryGroups
-    .map((group) => {
-      const affectedRows = Number(countSelector(group) || 0);
-      if (affectedRows <= 0) {
-        return null;
-      }
-
-      const reasonGroup = reasonMap.get(
-        buildCdtGroupKey(group.cdt_id, group.cdt_name)
-      );
-      return {
-        cdt_id: group.cdt_id,
-        cdt_name: group.cdt_name,
-        affected_rows: affectedRows,
-        reasons: reasonGroup?.reasons || [],
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => {
-      if (b.affected_rows !== a.affected_rows) {
-        return b.affected_rows - a.affected_rows;
-      }
-
-      return String(a.cdt_id ?? "").localeCompare(String(b.cdt_id ?? ""));
-    });
 }
 
 function buildDirectIssueGroupsByCdt(
@@ -1515,7 +1329,9 @@ function buildBusinessSummaryLines(report, options = {}) {
   const warningCdtCount = report.summary_by_cdt.filter(
     (group) => group.status === "WARNING" || group.status === "ERROR"
   ).length;
-  const sourceErrorGroups = buildSourceErrorGroups(report.source_errors);
+  const sourceErrorGroups = buildSourceErrorGroups(
+    filterCode3SourceErrors(report.source_errors),
+  );
   const code6Groups =
     Array.isArray(report.code6_candidates) && report.code6_candidates.length > 0
       ? report.code6_candidates
@@ -2148,7 +1964,9 @@ function buildDetailedIssueGroupsByCdt(
 }
 
 function buildTelegramIssueContext(report) {
-  const sourceErrorGroups = buildSourceErrorGroups(report.source_errors);
+  const sourceErrorGroups = buildSourceErrorGroups(
+    filterCode3SourceErrors(report.source_errors),
+  );
   const code6Groups =
     Array.isArray(report.code6_candidates) && report.code6_candidates.length > 0
       ? report.code6_candidates

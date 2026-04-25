@@ -46,7 +46,7 @@ function parseErrorCodeList(value) {
     .toString()
     .split(",")
     .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 9);
+    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 11);
 }
 
 function parseArgs(argv = []) {
@@ -695,7 +695,7 @@ function buildRunOptions(argv = [], env = process.env) {
       args["report-sheet-last-data-row"] ??
         env.ROOM_AUDIT_REPORT_SHEET_LAST_DATA_ROW ??
         env.npm_config_report_sheet_last_data_row,
-      11,
+      13,
     ),
     reportSheetStartColumn: parseNumber(
       args["report-sheet-start-column"] ??

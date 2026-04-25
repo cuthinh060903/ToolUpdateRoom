@@ -2916,18 +2916,23 @@ class UpdateRoomSari {
     return null;
   }
 
-  async extractGoogleSheetInfo(url) {
-    const regex = /\/spreadsheets\/d\/([^\/]+)\/.*gid=(\d+)/;
-    const match = url.match(regex);
+  async extractGoogleSheetInfo(url, fallbackGid = null) {
+    const normalizedUrl = (url || "").toString().trim();
+    const spreadsheetMatch = normalizedUrl.match(
+      /\/spreadsheets\/d\/([^\/?#]+)/i
+    );
+    const gidMatch = normalizedUrl.match(/[?#&]gid=(\d+)/i);
+    const normalizedFallbackGid = String(fallbackGid ?? "").trim();
+    const resolvedGid =
+      gidMatch?.[1] ||
+      (normalizedFallbackGid && normalizedFallbackGid !== "0"
+        ? normalizedFallbackGid
+        : null);
 
-    if (match) {
-      return {
-        spreadsheetId: match[1],
-        gid: match[2],
-      };
-    } else {
-      return { spreadsheetId: null, gid: null };
-    }
+    return {
+      spreadsheetId: spreadsheetMatch?.[1] || null,
+      gid: resolvedGid || null,
+    };
   }
 
   buildSheetUrl(baseUrl, gid) {
@@ -2936,12 +2941,8 @@ class UpdateRoomSari {
       return baseUrl;
     }
 
-    if (/gid=\d+/g.test(baseUrl)) {
-      return baseUrl.replace(/gid=\d+/g, `gid=${normalizedGid}`);
-    }
-
-    if (baseUrl.includes("gid=")) {
-      return baseUrl.replace(/gid=(?=#|$)/g, `gid=${normalizedGid}`);
+    if (/gid=/i.test(baseUrl)) {
+      return baseUrl.replace(/gid=[^&#]*/i, `gid=${normalizedGid}`);
     }
 
     const separator = baseUrl.includes("?") ? "&" : "?";
@@ -3247,19 +3248,76 @@ class UpdateRoomSari {
     );
   }
 
+  hasConfiguredField(value) {
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value);
+    }
+
+    if (Array.isArray(value)) {
+      return value.some((item) => this.hasConfiguredField(item));
+    }
+
+    return value.toString().trim() !== "";
+  }
+
+  hasLegacyColumnConfig(config = {}, index = -1) {
+    const legacyColumns = Array.isArray(config?.column) ? config.column : [];
+    if (index < 0 || index >= legacyColumns.length) {
+      return false;
+    }
+    return this.hasConfiguredField(legacyColumns[index]);
+  }
+
+  validateRequiredSheetFields(config = {}) {
+    const hasAddressField =
+      this.hasConfiguredField(config?.address_column) ||
+      this.hasLegacyColumnConfig(config, 0);
+    const hasRoomField =
+      this.hasConfiguredField(config?.room_column) ||
+      this.hasLegacyColumnConfig(config, 1);
+    const hasPriceField =
+      this.hasConfiguredField(config?.price_column) ||
+      this.hasLegacyColumnConfig(config, 3);
+    const hasDescriptionField = this.hasConfiguredField(config?.mota);
+    const hasImageField = this.hasConfiguredField(config?.exitLinkDriver);
+
+    const missingFields = [];
+    if (!hasAddressField) missingFields.push("địa chỉ");
+    if (!hasRoomField) missingFields.push("tên phòng");
+    if (!hasPriceField) missingFields.push("giá");
+    if (!hasDescriptionField) missingFields.push("mô tả");
+    if (!hasImageField) missingFields.push("ảnh");
+
+    return {
+      ok: missingFields.length === 0,
+      missingFields,
+    };
+  }
+
   async processCsvData(huydev, idSheetUrl = null) {
     try {
       let sheetData;
       const sheetUrl = this.buildSheetUrl(huydev.link, idSheetUrl);
       if (huydev.if == "caocap") {
         const { spreadsheetId, gid } = await this.extractGoogleSheetInfo(
-          sheetUrl
+          sheetUrl,
+          idSheetUrl
         );
+        if (!spreadsheetId || !gid) {
+          throw new Error(
+            `Không xác định được spreadsheetId/gid từ link: ${sheetUrl}`
+          );
+        }
         try {
           sheetData = await this.spreadsheets(spreadsheetId, gid);
         } catch (error) {
           const configuredLinkInfo = await this.extractGoogleSheetInfo(
-            huydev.link || ""
+            huydev.link || "",
+            idSheetUrl
           );
           const fallbackGid = configuredLinkInfo?.gid;
           const canFallbackToLinkGid =
@@ -3731,10 +3789,23 @@ class UpdateRoomSari {
 
         let missingAddresses = new Set();
         const executionKey = this.getSheetExecutionKey(huydev);
+        const requiredFieldCheck = this.validateRequiredSheetFields(huydev);
 
         console.log(
           `------------------------------------------------------- ${executionKey} ------------------------------------------------------------------ `
         );
+        if (!requiredFieldCheck.ok) {
+          const missingText = requiredFieldCheck.missingFields.join(", ");
+          console.warn(
+            `[config] Bỏ qua ${executionKey}: thiếu trường bắt buộc (${missingText}). Chưa chạy cập nhật kín/trống để tránh sai dữ liệu.`
+          );
+          cdtStats[huydev.id].error = true;
+          await this.appendToFile(
+            "driver_error.txt",
+            `${executionKey}|MISSING_REQUIRED_FIELDS|${missingText}|${this.getFormattedDate()}\n`
+          );
+          continue;
+        }
         const formattedDate = this.getFormattedDate();
         const entryExitsRun = `${executionKey}|${formattedDate}|TRUE`;
         const exitRunMismatch = await this.checkIfEntryExists(
