@@ -246,12 +246,14 @@
     exitLinkDriver: 8, // trường này là trường link driver
     column: [null, 1, null, 10], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     hesogia: 27000, //nếu vnd = 1 ; usd = 27000
+    hesogia_apply_when_price_lt: 500000, // giá < 500.000 => coi là USD, giá >= 500.000 => giữ nguyên VND
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
     mota: [3, 4, 5, 6, 7, 14], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 2, // dòng của tiêu đề nằm ngang
     columnVertical: 0, // stt cột lấy màu bị hàng dọc
     colorExitVerticalBg: "#CCCCCC", // màu ô chuyển bảng hàng dọc thành ngang
     colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+    address_banner_required: true, // chỉ cập nhật địa chỉ khi gặp dòng "ĐỊA CHỈ:"
     // Dòng địa chỉ phía trên (vd. "121 Trích Sài") nằm trước ô IMPORTRANGE — bỏ qua cho đến khi gặp công thức nhập khối
     address_only_after_import_range: true,
   },
@@ -276,12 +278,14 @@
     exitLinkDriver: 8, // trường này là trường link driver
     column: [null, 1, null, 10], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     hesogia: 27000, //nếu vnd = 1 ; usd = 27000
+    hesogia_apply_when_price_lt: 500000, // giá < 500.000 => coi là USD, giá >= 500.000 => giữ nguyên VND
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
     mota: [3, 4, 5, 6, 7, 14], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 2, // dòng của tiêu đề nằm ngang
     columnVertical: 0, // stt cột lấy màu bị hàng dọc
     colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
     colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+    address_banner_required: true, // chỉ cập nhật địa chỉ khi gặp dòng "ĐỊA CHỈ:"
   },
   {
     id: 5,
@@ -304,12 +308,14 @@
     exitLinkDriver: 8, // trường này là trường link driver
     column: [null, 1, null, 10], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     hesogia: 27000, //nếu vnd = 1 ; usd = 27000
+    hesogia_apply_when_price_lt: 500000, // giá < 500.000 => coi là USD, giá >= 500.000 => giữ nguyên VND
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
     mota: [3, 4, 5, 6, 7, 14], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: 2, // dòng của tiêu đề nằm ngang
     columnVertical: 0, // stt cột lấy màu bị hàng dọc
     colorExitVerticalBg: "#CCCCCC", // màu ô chuyển bảng hàng dọc thành ngang
     colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+    address_banner_required: true, // chỉ cập nhật địa chỉ khi gặp dòng "ĐỊA CHỈ:"
   },
   {
     id: 6,
@@ -619,7 +625,7 @@
   },
   {
     id: 10,
-    type: "chdv",
+    type: "hybrid",
     address_column: [1],
     room_column: [3],
     building_code_column: [null],
@@ -627,22 +633,23 @@
     name: "link10",
     if: "caocap",
     web: "10 b home",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2033427596#gid=2033427596",
+    link: "https://docs.google.com/spreadsheets/d/1Qu2IQGoCP7fJ_OhF7v8u8yAVEo_dVmUmdqSYcnSw6zg/edit?hl=vi&gid=0#gid=0",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [0], /// có nhiều id khác nhau
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
-    exit: ["FULL"], // tên từ muốn lọc
+    exit: ["FULL", "Đang setup", "setup"], // tên từ muốn lọc
     exitColumn: 7, // trường này là trường trạng thái loại trừ
     exitLinkDriver: 8, // trường này là trường link driver
     column: [1, 3, null, 6], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
-    mota: [2, 4, 5, 10, 12, 13, 14, 15], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota: [2, 4, 5, 11, 12, 13, 14, 15], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    mota_carry_forward_columns: [2, 11, 12, 13, 14, 15], // các cột mô tả bị gộp dòng theo block địa chỉ
     header: 5, // dòng của tiêu đề nằm ngang
-    // columnVertical: 0, // stt cột lấy màu bị hàng dọc
-    // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
-    // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
+    columnVertical: 1, // cột B là cột mốc địa chỉ (0-based)
+    colorExitVerticalBg: "#FFE599", // màu nền ô địa chỉ
+    colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
     id: 12,
@@ -2850,6 +2857,7 @@
     exitColumn: 5, // cột để loại trừ trống kín
     exitLinkDriver: 6, // trường này là trường link driver để tải ảnh về
     column: [null, 1, null, 2], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+    price_plain_number_multiplier: 1000, // giá nhập kiểu 3.400 => 3.400.000
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
     mota: [3, 4, 8], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
     header: null, // header không cố định, không map theo 1 dòng cố định
@@ -4135,6 +4143,9 @@
     name: "132",
     if: "caocap",
     web: "132",
+    keep_old_price_when_sheet_missing: true, // thiếu giá ở sheet => giữ nguyên giá cũ
+    hide_room_when_no_price_data: true, // thiếu cả giá mới lẫn giá cũ => để kín, không lên app
+    skip_create_room_when_price_missing: true, // phòng mới thiếu giá => không tạo
     link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1296546310",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [246641757], /// có nhiều id khác nhau
