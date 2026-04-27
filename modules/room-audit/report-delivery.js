@@ -12,7 +12,7 @@ const DEFAULT_REPORT_SHEET = {
   firstDataRow: 2,
   lastDataRow: 13,
   firstDayColumn: 7,
-  dayColumnWindowSize: 8,
+  dayColumnWindowSize: 10,
 };
 
 const ADDRESS_FIELD_REASONS = new Set(["ADDRESS_MISSING"]);
@@ -26,9 +26,6 @@ const PRICE_FIELD_REASONS = new Set([
 const NO_IMAGE_REASONS = new Set(["IMAGE_COUNT_ZERO"]);
 const NEW_BUILDING_LOG_FILES = ["nhamoi.txt", "khongcodulieu.txt"];
 const CDT_CONFIG_FILE = "constants.js";
-const RUNTIME_STRUCTURE_MIN_ROW_COUNT = 5;
-const RUNTIME_STRUCTURE_MIN_AUDITABLE_ROOM_COUNT = 3;
-const RUNTIME_STRUCTURE_MIN_AUDITABLE_ROOM_RATE = 0.5;
 
 function normalizeText(value) {
   if (value === null || value === undefined) {
@@ -440,7 +437,7 @@ function readWorkspaceLogLines(fileName = "") {
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -593,129 +590,9 @@ function isMissingRequiredSheetStructure(config = {}) {
   );
 }
 
-function normalizeCdtId(value) {
-  const text = normalizeText(value);
-  return text || null;
-}
-
-function buildConfigsByCdtId(configs = []) {
-  const mapping = new Map();
-  configs.forEach((config) => {
-    const cdtKey = normalizeCdtId(config?.id);
-    if (!cdtKey) {
-      return;
-    }
-
-    if (!mapping.has(cdtKey)) {
-      mapping.set(cdtKey, []);
-    }
-    mapping.get(cdtKey).push(config);
-  });
-  return mapping;
-}
-
-function hasConfiguredPriceField(config = {}) {
-  return (
-    hasConfiguredField(config?.price_column) || hasLegacyColumnConfig(config, 3)
-  );
-}
-
-function isLikelyAuditableRoomName(value = "") {
-  const text = normalizeText(value);
-  if (!text) {
-    return false;
-  }
-
-  const normalizedText = normalizeComparableText(text);
-  if (!normalizedText) {
-    return false;
-  }
-
-  if (
-    /^(trong|ct trong|dang coc|da coc|kin|het|cho thue|con|full|empty)$/.test(
-      normalizedText,
-    )
-  ) {
-    return false;
-  }
-
-  if (looksLikeRoomText(text)) {
-    return true;
-  }
-
-  if (/^[pt]?\d{2,5}[a-z]?$/i.test(text)) {
-    return true;
-  }
-
-  if (/^\d{2,4}\s*[-/]\s*\d{2,4}[a-z]?$/i.test(text)) {
-    return true;
-  }
-
-  return /\d/.test(text) && text.length <= 15;
-}
-
-function collectRuntimeMissingPriceCdtIds(report = {}, configsByCdtId = new Map()) {
-  const rows = Array.isArray(report?.rows) ? report.rows : [];
-  const rowsByCdtId = new Map();
-
-  rows.forEach((row) => {
-    const cdtKey = normalizeCdtId(row?.cdt_id);
-    if (!cdtKey) {
-      return;
-    }
-
-    if (!rowsByCdtId.has(cdtKey)) {
-      rowsByCdtId.set(cdtKey, []);
-    }
-    rowsByCdtId.get(cdtKey).push(row);
-  });
-
-  const cdtIds = new Set();
-
-  rowsByCdtId.forEach((cdtRows, cdtKey) => {
-    if (cdtRows.length < RUNTIME_STRUCTURE_MIN_ROW_COUNT) {
-      return;
-    }
-
-    const configs = configsByCdtId.get(cdtKey) || [];
-    if (!configs.some((config) => hasConfiguredPriceField(config))) {
-      return;
-    }
-
-    const nonEmptyRoomRows = cdtRows.filter(
-      (row) => normalizeText(row?.room_name) !== "",
-    );
-    if (nonEmptyRoomRows.length < RUNTIME_STRUCTURE_MIN_ROW_COUNT) {
-      return;
-    }
-
-    const auditableRoomRows = nonEmptyRoomRows.filter((row) =>
-      isLikelyAuditableRoomName(row?.room_name),
-    );
-    if (auditableRoomRows.length < RUNTIME_STRUCTURE_MIN_AUDITABLE_ROOM_COUNT) {
-      return;
-    }
-
-    if (
-      auditableRoomRows.length / nonEmptyRoomRows.length <
-      RUNTIME_STRUCTURE_MIN_AUDITABLE_ROOM_RATE
-    ) {
-      return;
-    }
-
-    const hasPositivePrice = cdtRows.some((row) => Number(row?.price) > 0);
-    if (!hasPositivePrice) {
-      cdtIds.add(cdtRows[0]?.cdt_id ?? cdtKey);
-    }
-  });
-
-  return [...cdtIds];
-}
-
-function collectIncompleteStructureCdtIds(report = {}) {
+function collectIncompleteStructureCdtIds() {
   const cdtIds = new Set();
   const configs = Array.isArray(LIST_GGSHEET) ? LIST_GGSHEET : [];
-  const configsByCdtId = buildConfigsByCdtId(configs);
 
   configs.forEach((config) => {
     if (config?.id === null || config?.id === undefined) {
@@ -725,10 +602,6 @@ function collectIncompleteStructureCdtIds(report = {}) {
     if (isMissingRequiredSheetStructure(config)) {
       cdtIds.add(config.id);
     }
-  });
-
-  collectRuntimeMissingPriceCdtIds(report, configsByCdtId).forEach((cdtId) => {
-    cdtIds.add(cdtId);
   });
 
   return [...cdtIds];
@@ -813,7 +686,7 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
       : `II.B.10: ${nonSelectedText}`,
     includeError(11)
       ? `II.B.11: Các CĐT có cấu trúc bảng không đầy đủ: ${cdtListText(
-          collectIncompleteStructureCdtIds(report),
+          collectIncompleteStructureCdtIds(),
         )}`
       : `II.B.11: ${nonSelectedText}`,
   ];

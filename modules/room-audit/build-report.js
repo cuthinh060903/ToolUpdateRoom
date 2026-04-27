@@ -130,7 +130,7 @@ function loadBusinessConclusionOverrides(options = {}) {
           },
         ])
     );
-  } catch (error) {
+  } catch {
     return new Map();
   }
 }
