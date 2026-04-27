@@ -21,7 +21,7 @@ function repairVietnameseText(value = "") {
   let repaired = "";
   try {
     repaired = Buffer.from(text, "latin1").toString("utf8");
-  } catch (error) {
+  } catch {
     return text;
   }
 

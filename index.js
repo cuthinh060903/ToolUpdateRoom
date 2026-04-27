@@ -4,16 +4,13 @@ require("dotenv").config();
 const csvtojson = require("csvtojson");
 const xlsx = require("xlsx");
 const { google } = require("googleapis");
-const cron = require("node-cron");
 const OpenAI = require("openai");
-const Fuse = require("fuse.js");
 const { LIST_GGSHEET } = require("./constants");
 const { extension, roomNameAliases } = require("./extension");
 const { sendTelegramMessage } = require("./telegram_bot");
 const path = require("path");
 const dayjs = require("dayjs");
 const { Client } = require("minio");
-const { time } = require("console");
 const mammoth = require("mammoth");
 const heicConvert = require("heic-convert");
 
@@ -141,7 +138,7 @@ class UpdateRoomSari {
     let parsedUrl;
     try {
       parsedUrl = new URL(normalizedLink);
-    } catch (error) {
+    } catch {
       return null;
     }
 
@@ -430,7 +427,7 @@ class UpdateRoomSari {
     } else {
       try {
         text = JSON.stringify(value);
-      } catch (error) {
+      } catch {
         text = String(value);
       }
     }
@@ -470,7 +467,7 @@ class UpdateRoomSari {
     const dirPath = path.join(__dirname, localFolder);
     try {
       await fs.access(dirPath);
-    } catch (err) {
+    } catch {
       await fs.mkdir(dirPath, { recursive: true });
     }
 
@@ -515,7 +512,7 @@ class UpdateRoomSari {
       let parsedUrl;
       try {
         parsedUrl = new URL(rawUrl);
-      } catch (error) {
+      } catch {
         continue;
       }
 
@@ -2964,7 +2961,7 @@ class UpdateRoomSari {
     let parsedUrl;
     try {
       parsedUrl = new URL(normalizedUrl);
-    } catch (error) {
+    } catch {
       return null;
     }
 
@@ -3508,15 +3505,7 @@ class UpdateRoomSari {
       //     value: huydev.colorExitVerticalText,
       //   });
       // }
-      const combinedColumns = [
-        ...huydev.address_column,
-        ...huydev.room_column,
-        ...huydev.building_code_column,
-        ...huydev.price_column,
-      ];
-      const findDouble = this.getAllDuplicateIndexes(combinedColumns);
       let datas = [];
-      let count = 0;
       let address;
       const descriptionCarryColumns = new Set(
         (Array.isArray(huydev?.mota_carry_forward_columns)
@@ -3532,7 +3521,6 @@ class UpdateRoomSari {
       );
       let importRangeSeen = !requireImportRangeBeforeAddress;
       for (let row of results) {
-        count++;
         // if(huydev?.header && count <= huydev.header) {
         //   continue; // Bỏ qua các hàng trước header
         // }
@@ -6022,30 +6010,6 @@ class UpdateRoomSari {
     }
   }
 }
-
-function clearFile() {
-  fs.writeFile("exits.txt", "", (err) => {
-    if (err) {
-      console.error("Error clearing file:", err);
-      return;
-    }
-    console.log("Xóa file thành công.");
-  });
-}
-
-// // cái này chạy theo thời gian
-
-// Lịch trình để xóa nội dung tệp tin vào lúc 4 giờ sáng
-// cron.schedule('0 4 * * *', () => {
-//   console.log('Clearing file content at 04:00 AM');
-//   clearFile();
-// });
-
-// // // Lịch trình để chạy công việc vào lúc 5 giờ sáng
-// cron.schedule('0 5 * * *', async () => {
-//   console.log('Running task at 5:00 AM');
-//   await runMainFlow();
-// });
 
 // cái này chạy trực tiếp thì phải tắt hẹn giờ ở trên đi từ 2485--> 2495
 async function runMainFlow() {

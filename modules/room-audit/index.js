@@ -217,7 +217,7 @@ async function readLogLines(rootDir, fileName) {
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -707,7 +707,7 @@ function buildRunOptions(argv = [], env = process.env) {
       args["report-sheet-day-window-size"] ??
         env.ROOM_AUDIT_REPORT_SHEET_DAY_WINDOW_SIZE ??
         env.npm_config_report_sheet_day_window_size,
-      8,
+      10,
     ),
     openClawWorkspaceDir:
       args["openclaw-workspace-dir"] ??

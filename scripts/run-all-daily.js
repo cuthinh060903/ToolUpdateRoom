@@ -71,24 +71,62 @@ function buildCombinedOptions(argv = [], env = process.env) {
 }
 
 async function runAllDailyFlow(options = {}) {
+  let mainError = null;
+  let roomAuditError = null;
+
   if (!options.skipMain) {
     console.log("[combined] Starting trong-kin updater...");
-    await runMainFlow();
-    console.log("[combined] Trong-kin updater completed.");
+    try {
+      await runMainFlow();
+      console.log("[combined] Trong-kin updater completed.");
+    } catch (error) {
+      mainError = error;
+      console.error(
+        `[combined] Trong-kin updater failed: ${error?.message || error}`,
+      );
+    }
   } else {
     console.log("[combined] Skipped trong-kin updater.");
   }
 
   if (!options.skipRoomAudit) {
     console.log("[combined] Starting room audit...");
-    const auditResult = await runAuditFlow(options.roomAudit || {});
-    console.log(
-      `[combined] Room audit completed. Total rows: ${auditResult.report.total_rows}`,
-    );
-    return auditResult;
+    let auditResult = null;
+    try {
+      auditResult = await runAuditFlow(options.roomAudit || {});
+      console.log(
+        `[combined] Room audit completed. Total rows: ${auditResult.report.total_rows}`,
+      );
+    } catch (error) {
+      roomAuditError = error;
+      console.error(`[combined] Room audit failed: ${error?.message || error}`);
+    }
+
+    if (!roomAuditError) {
+      if (mainError) {
+        throw new Error(
+          `[combined] Completed room audit nhưng bước trong-kin lỗi trước đó: ${
+            mainError?.message || mainError
+          }`,
+        );
+      }
+      return auditResult;
+    }
+  } else {
+    console.log("[combined] Skipped room audit.");
   }
 
-  console.log("[combined] Skipped room audit.");
+  if (mainError || roomAuditError) {
+    const failures = [];
+    if (mainError) {
+      failures.push(`trong-kin: ${mainError?.message || mainError}`);
+    }
+    if (roomAuditError) {
+      failures.push(`room-audit: ${roomAuditError?.message || roomAuditError}`);
+    }
+    throw new Error(`[combined] Run completed with errors | ${failures.join(" | ")}`);
+  }
+
   return null;
 }
 
