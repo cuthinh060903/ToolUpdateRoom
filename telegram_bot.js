@@ -58,10 +58,17 @@ async function sendTelegramMessage(message, options = {}) {
   const parseMode =
     Object.prototype.hasOwnProperty.call(options, "parseMode")
       ? options.parseMode
-      : "HTML";
+      : null;
+  const configuredTimeout = Number(
+    options.timeoutMs ?? process.env.TELEGRAM_REQUEST_TIMEOUT_MS,
+  );
+  const timeoutMs =
+    Number.isFinite(configuredTimeout) && configuredTimeout >= 3000
+      ? Math.floor(configuredTimeout)
+      : 12000;
   const maxAttempts = Number.isFinite(options.maxAttempts)
     ? Math.max(1, options.maxAttempts)
-    : 1;
+    : 2;
   const retryBaseMs = Number.isFinite(options.retryBaseMs)
     ? Math.max(0, options.retryBaseMs)
     : 1500;
@@ -96,7 +103,7 @@ async function sendTelegramMessage(message, options = {}) {
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await axios.post(url, payload);
+      await axios.post(url, payload, { timeout: timeoutMs });
       console.log(`[telegram] Da gui tin nhan den ${targetLabel}`);
       return {
         sent: true,
@@ -109,7 +116,9 @@ async function sendTelegramMessage(message, options = {}) {
       const retryAfterSeconds = Number(
         error?.response?.data?.parameters?.retry_after,
       );
-      const canRetry = status === 429 && attempt < maxAttempts;
+      const isRetryableStatus = status === 429 || status >= 500;
+      const isNetworkError = !error?.response;
+      const canRetry = (isRetryableStatus || isNetworkError) && attempt < maxAttempts;
 
       console.error(
         `[telegram] Loi khi gui tin nhan den ${targetLabel}:`,

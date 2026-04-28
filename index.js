@@ -21,6 +21,17 @@ const DAILY_ROTATION_LOG_FILES = new Set([
   "capnhattrong.txt",
 ]);
 const DEFAULT_LOG_RETENTION_DAYS = 3;
+const DEFAULT_API_TIMEOUT_MS = 30000;
+
+function toBooleanEnv(value, defaultValue = false) {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  return ["1", "true", "yes", "y", "on"].includes(
+    value.toString().trim().toLowerCase(),
+  );
+}
 
 class UpdateRoomSari {
   constructor() {
@@ -83,6 +94,13 @@ class UpdateRoomSari {
         ? Math.floor(configuredLogRetentionDays)
         : DEFAULT_LOG_RETENTION_DAYS;
     this.logRetentionCleanupDateByFile = new Map();
+    const configuredApiTimeout = Number(process.env.API_REQUEST_TIMEOUT_MS);
+    this.apiRequestTimeoutMs =
+      Number.isFinite(configuredApiTimeout) && configuredApiTimeout >= 5000
+        ? Math.floor(configuredApiTimeout)
+        : DEFAULT_API_TIMEOUT_MS;
+    this.verboseRuntimeLogs = toBooleanEnv(process.env.VERBOSE_RUNTIME_LOGS, false);
+    axios.defaults.timeout = this.apiRequestTimeoutMs;
 
     this.minioClient = new Client({
       endPoint: "s3.sari.vn",
@@ -2913,32 +2931,38 @@ class UpdateRoomSari {
         keywordTokens.length <= 1 &&
         normalizedSearchTerm !== normalizedCandidateAddress
       ) {
-        console.warn(
-          `[address-match] Bo qua match "${searchTerm}" vi dia chi qua chung chung cho ${
-            config?.web || "sheet"
-          } (${selectedResult.candidateVariant})`,
-        );
+        if (this.verboseRuntimeLogs) {
+          console.warn(
+            `[address-match] Bo qua match "${searchTerm}" vi dia chi qua chung chung cho ${
+              config?.web || "sheet"
+            } (${selectedResult.candidateVariant})`,
+          );
+        }
         return null;
       }
     }
     if (selectedResult?.accepted && selectedResult?.item) {
-      console.log(
-        `Chuoi gan nhat: ${
-          selectedResult.candidateVariant
-        } voi chuoi goc ${searchTerm} (match score: ${selectedResult.matchScore.toFixed(
-          2,
-        )})`,
-      );
+      if (this.verboseRuntimeLogs) {
+        console.log(
+          `Chuoi gan nhat: ${
+            selectedResult.candidateVariant
+          } voi chuoi goc ${searchTerm} (match score: ${selectedResult.matchScore.toFixed(
+            2,
+          )})`,
+        );
+      }
       return selectedResult.item;
     }
     if (selectedResult?.item) {
-      console.warn(
-        `[address-match] Bo qua match "${searchTerm}" voi dia chi "${
-          selectedResult.candidateVariant
-        }" (score ${selectedResult.matchScore.toFixed(2)}, ly do: ${
-          selectedResult.rejectReason || "threshold"
-        })`,
-      );
+      if (this.verboseRuntimeLogs) {
+        console.warn(
+          `[address-match] Bo qua match "${searchTerm}" voi dia chi "${
+            selectedResult.candidateVariant
+          }" (score ${selectedResult.matchScore.toFixed(2)}, ly do: ${
+            selectedResult.rejectReason || "threshold"
+          })`,
+        );
+      }
       return null;
     }
     return null;
@@ -3958,14 +3982,16 @@ class UpdateRoomSari {
               const searchRealnews = await this.searchRealnewByInvestor(
                 huydev.id,
               );
-              console.log(
-                `[DEBUG] CDT ${huydev.id} found ${searchRealnews.content.length} buildings on web.`,
-              );
-              searchRealnews.content.forEach((b) =>
+              if (this.verboseRuntimeLogs) {
                 console.log(
-                  `  - Web Building: ${b.id} | ${b.code} | ${b.address_valid}`,
-                ),
-              );
+                  `[DEBUG] CDT ${huydev.id} found ${searchRealnews.content.length} buildings on web.`,
+                );
+                searchRealnews.content.forEach((b) =>
+                  console.log(
+                    `  - Web Building: ${b.id} | ${b.code} | ${b.address_valid}`,
+                  ),
+                );
+              }
 
               if (huydev?.id && !investors.includes(huydev.id)) {
                 // update all room of realnews kín
@@ -4018,16 +4044,20 @@ class UpdateRoomSari {
                         row["ADDRESS"],
                       )}|${this.normalizeComparableText(row["ROOMS"])}`;
                       if (processedAddressRoomKeys.has(dedupeKey)) {
-                        console.log(
-                          `[DEBUG] Skip duplicate ADDRESS+ROOMS in same sheet run: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`,
-                        );
+                        if (this.verboseRuntimeLogs) {
+                          console.log(
+                            `[DEBUG] Skip duplicate ADDRESS+ROOMS in same sheet run: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`,
+                          );
+                        }
                         continue;
                       }
                       processedAddressRoomKeys.add(dedupeKey);
 
-                      console.log(
-                        `[DEBUG] Row processing: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`,
-                      );
+                      if (this.verboseRuntimeLogs) {
+                        console.log(
+                          `[DEBUG] Row processing: ADDRESS="${row["ADDRESS"]}" ROOMS="${row["ROOMS"]}"`,
+                        );
+                      }
                       if (searchRealnews && searchRealnews.content.length > 0) {
                         const item = await this.fuzzySearch(
                           row["ADDRESS"],
@@ -4035,9 +4065,11 @@ class UpdateRoomSari {
                           huydev,
                         );
                         if (item) {
-                          console.log(
-                            `[DEBUG] Matched "${row["ADDRESS"]}" to building ${item.id} (${item.address_valid})`,
-                          );
+                          if (this.verboseRuntimeLogs) {
+                            console.log(
+                              `[DEBUG] Matched "${row["ADDRESS"]}" to building ${item.id} (${item.address_valid})`,
+                            );
+                          }
                           const searchRooms = await this.searchRoom(item.id);
 
                           if (searchRooms?.content) {
@@ -4624,7 +4656,9 @@ class UpdateRoomSari {
       const rawDescription = row["DESCRIPTIONS"];
       description = this.sanitizeTextForLegacyApi(rawDescription);
       const extension = this.convertDescription2Extension(rawDescription);
-      console.log(extension);
+      if (this.verboseRuntimeLogs) {
+        console.log(extension);
+      }
       const res = await this.callApi({
         domain: `https://apiv1.sari.vn/v1`,
         path: `/tag-relations/room/${room.id}`,
@@ -4634,8 +4668,10 @@ class UpdateRoomSari {
       if (res.status !== 200) {
         console.log("Cập nhật trống thất bại");
       } else {
-        console.log("room.id=>>>>", room.id);
-        console.log("Cập nhật trống thành công");
+        if (this.verboseRuntimeLogs) {
+          console.log("room.id=>>>>", room.id);
+          console.log("Cập nhật trống thành công");
+        }
       }
     }
 
@@ -4700,7 +4736,7 @@ class UpdateRoomSari {
       formattedDate,
     );
     console.log(
-      `Phòng ${roomNumber} với ID ${room.id} và đã được cập nhật giá ${row["PRICE"]} và mô tả ${row["DESCRIPTIONS"]} thành công.`,
+      `Phòng ${roomNumber} với ID ${room.id} đã cập nhật giá/mô tả thành công.`,
     );
   }
   // update price
@@ -5744,7 +5780,7 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_REALNEW_SEARCH + `?page=${this.PAGE}&size=${this.SIZE}`,
           searchData,
-          { headers: headers },
+          { headers: headers, timeout: this.apiRequestTimeoutMs },
         ),
       );
       const responseData = response.data;
@@ -5778,7 +5814,7 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_REALNEW_SEARCH + `?page=${this.PAGE}&size=${this.SIZE}`,
           searchData,
-          { headers: headers },
+          { headers: headers, timeout: this.apiRequestTimeoutMs },
         ),
       );
       const responseData = response.data;
@@ -5807,7 +5843,7 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_ROOM_SEARCH + `?page=${this.PAGE}&size=${this.SIZE}`,
           searchData,
-          { headers: headers },
+          { headers: headers, timeout: this.apiRequestTimeoutMs },
         ),
       );
       const responseData = response.data;
@@ -5832,11 +5868,13 @@ class UpdateRoomSari {
         axios.post(
           this.URL_API_UNLOCK_ROOM + `?id=${id}`,
           {},
-          { headers: headers },
+          { headers: headers, timeout: this.apiRequestTimeoutMs },
         ),
       );
       const responseData = response.data;
-      console.log("Data unlock", responseData);
+      if (this.verboseRuntimeLogs) {
+        console.log("Data unlock", responseData);
+      }
       return responseData;
     } catch (error) {
       console.error("Error unlockRoom:", error);
@@ -5859,6 +5897,7 @@ class UpdateRoomSari {
         method,
         data,
         headers,
+        timeout: this.apiRequestTimeoutMs,
       });
 
       return response;
@@ -5904,10 +5943,13 @@ class UpdateRoomSari {
       const response = await this.retryRequest(() =>
         axios.patch(this.URL_API_UPDATE_ROOM + id, data, {
           headers: headers,
+          timeout: this.apiRequestTimeoutMs,
         }),
       );
       const responseData = response.data;
-      console.log(responseData);
+      if (this.verboseRuntimeLogs) {
+        console.log("updateRoom response", responseData);
+      }
       return responseData;
     } catch (error) {
       console.error("Error updateRoom:", error);
@@ -5928,10 +5970,11 @@ class UpdateRoomSari {
       const response = await this.retryRequest(() =>
         axios.post("https://api-legacy.sari.vn/v1/realnews", data, {
           headers: headers,
+          timeout: this.apiRequestTimeoutMs,
         }),
       );
       const responseData = response?.data;
-      console.log("Tạo thành công tòa mới::", response);
+      console.log("Tạo thành công tòa mới");
       return responseData;
     } catch (error) {
       console.error("Error updateRoom:", error);
@@ -5952,6 +5995,7 @@ class UpdateRoomSari {
       const response = await this.retryRequest(() =>
         axios.post("https://api-legacy.sari.vn/v1/rooms", data, {
           headers: headers,
+          timeout: this.apiRequestTimeoutMs,
         }),
       );
       const responseData = response.data;
@@ -5998,11 +6042,14 @@ class UpdateRoomSari {
           {},
           {
             headers: headers,
+            timeout: this.apiRequestTimeoutMs,
           },
         ),
       );
       const responseData = response.data;
-      console.log(responseData);
+      if (this.verboseRuntimeLogs) {
+        console.log("lockRoom response", responseData);
+      }
       return responseData;
     } catch (error) {
       console.error("Error lockRoom:", error.data);
