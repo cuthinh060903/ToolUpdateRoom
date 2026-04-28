@@ -88,6 +88,10 @@ $exitCode = $LASTEXITCODE
 Add-Content -Path $logFile -Value ""
 Add-Content -Path $logFile -Value "[scheduler] Exit code: $exitCode"
 
+if ($exitCode -eq -1073740791) {
+  Add-Content -Path $logFile -Value "[scheduler] Detected STATUS_STACK_BUFFER_OVERRUN (0xC0000409). This is a process-level crash (often native/runtime abort), not a normal JS exception."
+}
+
 if ($exitCode -ne 0) {
   throw "Tool exited with code $exitCode. See log: $logFile"
 }
