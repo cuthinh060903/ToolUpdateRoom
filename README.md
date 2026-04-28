@@ -71,6 +71,42 @@ Remove-Item Env:RUN_ONLY_IDS -ErrorAction SilentlyContinue
 node index.js
 ```
 
+## Sheet Source Priority (AI0 -> AI1 -> AI2 -> MANUAL3)
+
+Main updater (`index.js`) now reads each CDT source with this priority:
+
+- `AI0`: direct source from current `link` + `list_address` in `constants.js`.
+- If `AI0` fails, fallback to `AI1`, then `AI2`, then `MANUAL3` (if configured).
+
+Quick config example in `constants.js` (per CDT item):
+
+```js
+{
+  id: 339,
+  link: "https://docs.google.com/spreadsheets/d/.../edit?gid=111", // AI0
+  list_address: [111],
+
+  link_ai1: "https://docs.google.com/spreadsheets/d/.../edit?gid=222",
+  list_address_ai1: [222], // or gid_ai1: 222
+
+  link_ai2: "https://docs.google.com/spreadsheets/d/.../edit?gid=333",
+  list_address_ai2: [333], // or gid_ai2: 333
+
+  link_manual3: "https://docs.google.com/spreadsheets/d/.../edit?gid=444",
+  list_address_manual3: [444], // or gid_manual3: 444
+}
+```
+
+Advanced option: define explicit fallback order with `sheet_source_priority` for each CDT:
+
+```js
+sheet_source_priority: [
+  { label: "AI1", link: "...", list_address: [222] },
+  { label: "AI2", link: "...", list_address: [333] },
+  { label: "MANUAL3", link: "...", list_address: [444] },
+];
+```
+
 ## Auto Run Every Day On Windows
 
 Recommended approach: run the combined flow (`trong-kin` -> `room-audit`) once per trigger, then let Windows Task Scheduler call it every day.

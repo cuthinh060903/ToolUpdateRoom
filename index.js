@@ -3051,6 +3051,143 @@ class UpdateRoomSari {
     return `${baseUrl}${separator}gid=${normalizedGid}`;
   }
 
+  normalizeSheetGid(value) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const normalized = value.toString().trim();
+    return normalized === "" ? null : normalized;
+  }
+
+  normalizeSheetGidList(values) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+
+    return values
+      .map((value) => this.normalizeSheetGid(value))
+      .filter((value) => value !== null);
+  }
+
+  resolveSourceGidByIndex(config = {}, index = 0, fallbackGid = null) {
+    const explicitGid = this.normalizeSheetGid(config?.gid);
+    if (explicitGid !== null) {
+      return explicitGid;
+    }
+
+    const gidList = this.normalizeSheetGidList(config?.list_address);
+    if (gidList.length === 0) {
+      return this.normalizeSheetGid(fallbackGid);
+    }
+
+    if (index >= 0 && index < gidList.length) {
+      return gidList[index];
+    }
+
+    const normalizedFallback = this.normalizeSheetGid(fallbackGid);
+    if (normalizedFallback !== null && gidList.includes(normalizedFallback)) {
+      return normalizedFallback;
+    }
+
+    return gidList[0];
+  }
+
+  getSheetSourceCandidates(huydev, idSheetUrl = null, sheetIndex = 0) {
+    const candidates = [];
+    const dedupe = new Set();
+
+    const pushCandidate = (candidate = {}) => {
+      const link = (candidate?.link || "").toString().trim();
+      if (!link) {
+        return;
+      }
+
+      const gid = this.normalizeSheetGid(candidate?.gid);
+      const label = (candidate?.label || "SOURCE").toString().trim() || "SOURCE";
+      const key = `${link}|${gid ?? ""}`;
+      if (dedupe.has(key)) {
+        return;
+      }
+      dedupe.add(key);
+
+      candidates.push({
+        label,
+        link,
+        gid,
+      });
+    };
+
+    // Ưu tiên AI0: link bảng hàng trực tiếp của CDT.
+    pushCandidate({
+      label: "AI0",
+      link: huydev?.link,
+      gid: this.normalizeSheetGid(idSheetUrl),
+    });
+
+    const normalizedSheetSourcePriority = Array.isArray(huydev?.sheet_source_priority)
+      ? huydev.sheet_source_priority
+      : [];
+
+    normalizedSheetSourcePriority.forEach((sourceConfig, sourceIndex) => {
+      if (!sourceConfig || sourceConfig.enabled === false) {
+        return;
+      }
+
+      const resolvedGid = this.resolveSourceGidByIndex(
+        sourceConfig,
+        sheetIndex,
+        idSheetUrl,
+      );
+      pushCandidate({
+        label:
+          sourceConfig.label ||
+          sourceConfig.name ||
+          sourceConfig.key ||
+          `SOURCE_${sourceIndex + 1}`,
+        link: sourceConfig.link,
+        gid: resolvedGid,
+      });
+    });
+
+    const legacyFallbackSources = [
+      {
+        label: "AI1",
+        link: huydev?.link_ai1 || huydev?.ai1_link,
+        list_address: huydev?.list_address_ai1 || huydev?.ai1_list_address,
+        gid: huydev?.gid_ai1 || huydev?.ai1_gid,
+      },
+      {
+        label: "AI2",
+        link: huydev?.link_ai2 || huydev?.ai2_link,
+        list_address: huydev?.list_address_ai2 || huydev?.ai2_list_address,
+        gid: huydev?.gid_ai2 || huydev?.ai2_gid,
+      },
+      {
+        label: "MANUAL3",
+        link: huydev?.link_manual3 || huydev?.manual3_link,
+        list_address:
+          huydev?.list_address_manual3 || huydev?.manual3_list_address,
+        gid: huydev?.gid_manual3 || huydev?.manual3_gid,
+      },
+    ];
+
+    legacyFallbackSources.forEach((sourceConfig) => {
+      const resolvedGid = this.resolveSourceGidByIndex(
+        sourceConfig,
+        sheetIndex,
+        idSheetUrl,
+      );
+      pushCandidate({
+        label: sourceConfig.label,
+        link: sourceConfig.link,
+        gid: resolvedGid,
+      });
+    });
+
+    return candidates;
+  }
+
   async convertToCSVLink(editUrl) {
     const spreadsheetMatch = editUrl.match(/\/spreadsheets\/d\/([^\/]+)/);
     const gidMatch = editUrl.match(/gid=(\d+)/);
@@ -3404,57 +3541,119 @@ class UpdateRoomSari {
     };
   }
 
-  async processCsvData(huydev, idSheetUrl = null) {
+  async processCsvData(huydev, idSheetUrl = null, sheetIndex = 0) {
     try {
       let sheetData;
-      const sheetUrl = this.buildSheetUrl(huydev.link, idSheetUrl);
-      if (huydev.if == "caocap") {
-        const { spreadsheetId, gid } = await this.extractGoogleSheetInfo(
-          sheetUrl,
-          idSheetUrl,
-        );
-        if (!spreadsheetId || !gid) {
-          throw new Error(
-            `Không xác định được spreadsheetId/gid từ link: ${sheetUrl}`,
-          );
-        }
-        try {
-          sheetData = await this.spreadsheets(spreadsheetId, gid);
-        } catch (error) {
-          const configuredLinkInfo = await this.extractGoogleSheetInfo(
-            huydev.link || "",
-            idSheetUrl,
-          );
-          const fallbackGid = configuredLinkInfo?.gid;
-          const canFallbackToLinkGid =
-            fallbackGid !== null &&
-            fallbackGid !== undefined &&
-            String(fallbackGid).trim() !== "" &&
-            String(fallbackGid) !== String(gid);
+      const sourceCandidates = this.getSheetSourceCandidates(
+        huydev,
+        idSheetUrl,
+        sheetIndex,
+      );
+      const sourceErrors = [];
+      let selectedSource = null;
 
-          if (!canFallbackToLinkGid) {
-            throw error;
+      if (sourceCandidates.length === 0) {
+        throw new Error(
+          `Không có nguồn bảng hàng khả dụng cho CDT ${huydev?.id || "unknown"}.`,
+        );
+      }
+
+      for (const sourceCandidate of sourceCandidates) {
+        const sheetUrl = this.buildSheetUrl(
+          sourceCandidate.link,
+          sourceCandidate.gid,
+        );
+        const sourceLabel = sourceCandidate.label || "SOURCE";
+
+        try {
+          if (huydev.if == "caocap") {
+            const { spreadsheetId, gid } = await this.extractGoogleSheetInfo(
+              sheetUrl,
+              sourceCandidate.gid,
+            );
+            if (!spreadsheetId || !gid) {
+              throw new Error(
+                `Không xác định được spreadsheetId/gid từ link: ${sheetUrl}`,
+              );
+            }
+
+            try {
+              sheetData = await this.spreadsheets(spreadsheetId, gid);
+            } catch (error) {
+              const configuredLinkInfo = await this.extractGoogleSheetInfo(
+                sourceCandidate.link || "",
+                sourceCandidate.gid,
+              );
+              const fallbackGid = configuredLinkInfo?.gid;
+              const canFallbackToLinkGid =
+                fallbackGid !== null &&
+                fallbackGid !== undefined &&
+                String(fallbackGid).trim() !== "" &&
+                String(fallbackGid) !== String(gid);
+
+              if (!canFallbackToLinkGid) {
+                throw error;
+              }
+
+              console.warn(
+                `[sheet-fallback][${sourceLabel}] gid=${gid} không tồn tại, thử lại bằng gid trên link=${fallbackGid}`,
+              );
+              sheetData = await this.spreadsheets(spreadsheetId, fallbackGid);
+            }
+          } else if (huydev.if == "binhthuong") {
+            const csvUrl = await this.convertToCSVLink(sheetUrl);
+            if (!csvUrl) {
+              throw new Error(`Không convert được CSV URL từ link: ${sheetUrl}`);
+            }
+            const response = await axios.get(csvUrl);
+            const data = await csvtojson().fromString(response.data);
+
+            const worksheet = xlsx.utils.json_to_sheet(data);
+            const workbook = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+            sheetData = xlsx.utils.sheet_to_json(worksheet);
+          } else {
+            throw new Error(`Loại nguồn không hỗ trợ: ${huydev.if}`);
           }
 
+          selectedSource = {
+            label: sourceLabel,
+            link: sourceCandidate.link,
+            gid: sourceCandidate.gid,
+            sheetUrl,
+          };
+          break;
+        } catch (error) {
+          const errorMessage = error?.message || String(error);
+          sourceErrors.push(`${sourceLabel}: ${errorMessage}`);
           console.warn(
-            `[sheet-fallback] gid=${gid} không tồn tại, thử lại bằng gid trên link=${fallbackGid}`,
+            `[sheet-source] Không đọc được nguồn ${sourceLabel} cho CDT ${huydev?.id}: ${errorMessage}`,
           );
-          sheetData = await this.spreadsheets(spreadsheetId, fallbackGid);
         }
       }
 
-      if (huydev.if == "binhthuong") {
-        const csvUrl = await this.convertToCSVLink(sheetUrl);
-        const response = await axios.get(csvUrl);
-        const data = await csvtojson().fromString(response.data);
-
-        const worksheet = xlsx.utils.json_to_sheet(data);
-        const workbook = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-        sheetData = xlsx.utils.sheet_to_json(worksheet);
+      if (!selectedSource || !sheetData) {
+        throw new Error(
+          `Không đọc được bảng hàng từ các nguồn ưu tiên (${sourceErrors.join(" | ")})`,
+        );
       }
+
+      if (selectedSource.label !== "AI0") {
+        console.warn(
+          `[sheet-source] CDT ${huydev?.id} fallback sang ${selectedSource.label} (${selectedSource.sheetUrl})`,
+        );
+      } else {
+        console.log(
+          `[sheet-source] CDT ${huydev?.id} chạy trực tiếp AI0 (${selectedSource.sheetUrl})`,
+        );
+      }
+
       if (!sheetData) {
-        return [];
+        return {
+          rows: [],
+          source: selectedSource,
+          sourceErrors,
+        };
       }
       let results = sheetData;
 
@@ -3880,7 +4079,11 @@ class UpdateRoomSari {
         return true;
       });
 
-      return datas;
+      return {
+        rows: datas,
+        source: selectedSource,
+        sourceErrors,
+      };
     } catch (error) {
       console.error(`Có lỗi xảy ra: ${error}`);
       throw error;
@@ -3978,7 +4181,10 @@ class UpdateRoomSari {
         if (!exitRunMismatch) {
           // run
           try {
-            for (let idSheetUrl of huydev.list_address) {
+            const sheetAddressList = Array.isArray(huydev.list_address)
+              ? huydev.list_address
+              : [null];
+            for (const [sheetIndex, idSheetUrl] of sheetAddressList.entries()) {
               const searchRealnews = await this.searchRealnewByInvestor(
                 huydev.id,
               );
@@ -4005,11 +4211,16 @@ class UpdateRoomSari {
                 investors.push(huydev.id);
               }
 
-              const processedData = await this.processCsvData(
+              const processedResult = await this.processCsvData(
                 huydev,
                 idSheetUrl,
+                sheetIndex,
               );
-              if (!processedData) {
+              const processedData = Array.isArray(processedResult?.rows)
+                ? processedResult.rows
+                : [];
+              const selectedSource = processedResult?.source || null;
+              if (!processedResult) {
                 console.log(
                   "link bảng hàng::",
                   this.buildSheetUrl(huydev.link, idSheetUrl),
@@ -4018,10 +4229,15 @@ class UpdateRoomSari {
                 cdtStats[huydev.id].error = true;
                 break;
               }
+              if (selectedSource?.link) {
+                cdtStats[huydev.id].link = selectedSource.link;
+              }
               console.log("SỐ LƯỢNG BẢNG HÀNG ", processedData?.length);
 
               if (processedData?.length > 0) {
-                const totalDongKey = `${huydev.id}|${huydev.link}|${idSheetUrl}`;
+                const totalDongKey = `${huydev.id}|${
+                  selectedSource?.link || huydev.link
+                }|${selectedSource?.gid ?? idSheetUrl}`;
                 const allowDuplicateRoomNames = Boolean(
                   huydev.allow_duplicate_room_names,
                 );

@@ -1,4 +1,21 @@
 ﻿const LIST_GGSHEET = [
+  // Fallback nguồn bảng hàng (tuỳ chọn, theo thứ tự ưu tiên):
+  // - AI0: luôn là `link` + `list_address` hiện tại.
+  // - AI1/AI2/MANUAL3: chỉ cần khai báo khi muốn fallback tự động.
+  // Ví dụ:
+  // link_ai1: "https://docs.google.com/spreadsheets/d/.../edit?gid=123",
+  // list_address_ai1: [123], // hoặc gid_ai1: 123
+  // link_ai2: "https://docs.google.com/spreadsheets/d/.../edit?gid=456",
+  // list_address_ai2: [456], // hoặc gid_ai2: 456
+  // link_manual3: "https://docs.google.com/spreadsheets/d/.../edit?gid=789",
+  // list_address_manual3: [789], // hoặc gid_manual3: 789
+  //
+  // Nâng cao: có thể dùng `sheet_source_priority`:
+  // sheet_source_priority: [
+  //   { label: "AI1", link: "...", list_address: [123] },
+  //   { label: "AI2", link: "...", list_address: [456] },
+  //   { label: "MANUAL3", link: "...", list_address: [789] },
+  // ],
   // {
   //  id: 1.1,
   // type: "chdv",
