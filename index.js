@@ -3060,6 +3060,26 @@ class UpdateRoomSari {
     return normalized === "" ? null : normalized;
   }
 
+  extractSheetGidFromUrl(url) {
+    const normalizedUrl = (url || "").toString().trim();
+    if (!normalizedUrl) {
+      return null;
+    }
+
+    const gidMatch = normalizedUrl.match(/[?#&]gid=(\d+)/i);
+    return this.normalizeSheetGid(gidMatch?.[1] || null);
+  }
+
+  isTemplateOrFallbackGid(gid) {
+    const normalizedGid = this.normalizeSheetGid(gid);
+    if (normalizedGid === null) {
+      return true;
+    }
+
+    // Legacy constants dùng gid mẫu 246641757 để đánh dấu "có nhiều tab".
+    return normalizedGid === "0" || normalizedGid === "246641757";
+  }
+
   normalizeSheetGidList(values) {
     if (!Array.isArray(values)) {
       return [];
@@ -3118,12 +3138,33 @@ class UpdateRoomSari {
       });
     };
 
+    const getOrderedGids = (link, primaryGid) => {
+      const normalizedPrimaryGid = this.normalizeSheetGid(primaryGid);
+      const linkGid = this.extractSheetGidFromUrl(link);
+      const shouldPreferLinkGidFirst =
+        normalizedPrimaryGid !== null &&
+        linkGid !== null &&
+        normalizedPrimaryGid !== linkGid &&
+        this.isTemplateOrFallbackGid(normalizedPrimaryGid);
+
+      const gidCandidates = shouldPreferLinkGidFirst
+        ? [linkGid, normalizedPrimaryGid]
+        : [normalizedPrimaryGid, linkGid];
+      return [...new Set(gidCandidates.filter((gid) => gid !== null))];
+    };
+
+    const pushSourceWithAutoGids = (label, link, primaryGid) => {
+      const orderedGids = getOrderedGids(link, primaryGid);
+      if (orderedGids.length === 0) {
+        pushCandidate({ label, link, gid: null });
+        return;
+      }
+
+      orderedGids.forEach((gid) => pushCandidate({ label, link, gid }));
+    };
+
     // Ưu tiên AI0: link bảng hàng trực tiếp của CDT.
-    pushCandidate({
-      label: "AI0",
-      link: huydev?.link,
-      gid: this.normalizeSheetGid(idSheetUrl),
-    });
+    pushSourceWithAutoGids("AI0", huydev?.link, idSheetUrl);
 
     const normalizedSheetSourcePriority = Array.isArray(huydev?.sheet_source_priority)
       ? huydev.sheet_source_priority
@@ -3139,15 +3180,12 @@ class UpdateRoomSari {
         sheetIndex,
         idSheetUrl,
       );
-      pushCandidate({
-        label:
-          sourceConfig.label ||
-          sourceConfig.name ||
-          sourceConfig.key ||
-          `SOURCE_${sourceIndex + 1}`,
-        link: sourceConfig.link,
-        gid: resolvedGid,
-      });
+      const sourceLabel =
+        sourceConfig.label ||
+        sourceConfig.name ||
+        sourceConfig.key ||
+        `SOURCE_${sourceIndex + 1}`;
+      pushSourceWithAutoGids(sourceLabel, sourceConfig.link, resolvedGid);
     });
 
     const legacyFallbackSources = [
@@ -3178,11 +3216,11 @@ class UpdateRoomSari {
         sheetIndex,
         idSheetUrl,
       );
-      pushCandidate({
-        label: sourceConfig.label,
-        link: sourceConfig.link,
-        gid: resolvedGid,
-      });
+      pushSourceWithAutoGids(
+        sourceConfig.label,
+        sourceConfig.link,
+        resolvedGid,
+      );
     });
 
     return candidates;
@@ -3225,7 +3263,7 @@ class UpdateRoomSari {
     }
   }
 
-  async spreadsheets(spreadsheetId, targetGid) {
+  async spreadsheets(spreadsheetId, targetGid, options = {}) {
     const auth = new google.auth.GoogleAuth({
       keyFile: "ggsheets.json",
       scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
@@ -3307,10 +3345,12 @@ class UpdateRoomSari {
         return [];
       }
     } catch (error) {
-      console.error(
-        `An error occurred in spreadsheets (${spreadsheetId}, ${targetGid}):`,
-        error,
-      );
+      if (!options?.silentErrors) {
+        console.error(
+          `An error occurred in spreadsheets (${spreadsheetId}, ${targetGid}):`,
+          error,
+        );
+      }
       throw error;
     }
   }
@@ -3578,7 +3618,9 @@ class UpdateRoomSari {
             }
 
             try {
-              sheetData = await this.spreadsheets(spreadsheetId, gid);
+              sheetData = await this.spreadsheets(spreadsheetId, gid, {
+                silentErrors: true,
+              });
             } catch (error) {
               const configuredLinkInfo = await this.extractGoogleSheetInfo(
                 sourceCandidate.link || "",
@@ -3589,6 +3631,7 @@ class UpdateRoomSari {
                 fallbackGid !== null &&
                 fallbackGid !== undefined &&
                 String(fallbackGid).trim() !== "" &&
+                String(fallbackGid).trim() !== "0" &&
                 String(fallbackGid) !== String(gid);
 
               if (!canFallbackToLinkGid) {
@@ -3598,7 +3641,9 @@ class UpdateRoomSari {
               console.warn(
                 `[sheet-fallback][${sourceLabel}] gid=${gid} không tồn tại, thử lại bằng gid trên link=${fallbackGid}`,
               );
-              sheetData = await this.spreadsheets(spreadsheetId, fallbackGid);
+              sheetData = await this.spreadsheets(spreadsheetId, fallbackGid, {
+                silentErrors: true,
+              });
             }
           } else if (huydev.if == "binhthuong") {
             const csvUrl = await this.convertToCSVLink(sheetUrl);
