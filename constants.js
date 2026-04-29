@@ -170,22 +170,31 @@
   //  column: [1, 3, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
   //  },
 
-  // {
-  //  id: 2,
-  // type: "chdv",
-  // address_column: [1],
-  // room_column: [4],
-  // building_code_column: [null],
-  // price_column: [null],
-  // name: "link2 hrh",
-  // if: "binhthuong",
-  // link: "https://docs.google.com/spreadsheets/d/1r9-IiJxW2HMYCsBmPUmBuz35kSimSw2gKxrHt1R7zYk/edit#gid=",
-  // scv: "https://docs.google.com/spreadsheets/d/1r9-IiJxW2HMYCsBmPUmBuz35kSimSw2gKxrHt1R7zYk/export?format=csv&gid=",
-  // list_address: [769482754],
-  // exit: ["Sắp trống"], // tên từ muốn lọc
-  // exitColumn: 3, // trường này là trường trạng thái loại trừ
-  //column: [1, 4, null], // địa chỉ , phòng ,mã tòa ở bảng hàng
-  // },
+  {
+   id: 2,
+  type: "chdv",
+  address_column: [1],
+  room_column: [2],
+  building_code_column: [null],
+  price_column: [6],
+  name: "2 fun",
+  if: "binhthuong",
+  link: "https://docs.google.com/spreadsheets/d/1o6XnscEBJ0qThKCJbJMzqbeCtYKBB-C7GDRZchpvM8k/edit?pli=1&gid=57660485#gid=57660485",
+  //scv: "https://docs.google.com/spreadsheets/d/1r9-IiJxW2HMYCsBmPUmBuz35kSimSw2gKxrHt1R7zYk/export?format=csv&gid=",
+  list_address: [57660485],
+  exit: ["kín"], // tên từ muốn lọc
+  exitColumn: 3, // trường này là trường trạng thái loại trừ
+  column: [1, 2, null], // địa chỉ , phòng ,mã tòa ở bảng hàng
+  exitLinkDriver: 12, // trường này là trường link driver
+  
+    
+    // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
+    mota: [5, 7, 8, 9, 10,11], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    header: 1, // truong nay la truong header
+    //         columnVertical: 1, // stt ô lấy màu bị hàng dọc
+    //         colorExitVerticalBg: "#ffff00ff", // màu ô chuyển bảng hàng dọc thành ngang
+    //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
+  },
   {
     id: 3,
     type: "chdv",
@@ -635,7 +644,7 @@
     column: [0, 1, null, 4], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '-' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
     mota: [5, 6, 8, 9, 10, 11, 12], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
-    header: 0, // dòng của tiêu đề nằm ngang
+    header: null, // dòng của tiêu đề nằm ngang
     // columnVertical: 0, // stt cột lấy màu bị hàng dọc
     // colorExitVerticalBg: "#cccccc", // màu ô chuyển bảng hàng dọc thành ngang
     // colorExitVerticalText: null, // màu chữ chuyển bảng hàng dọc thành ngang
@@ -2502,24 +2511,30 @@
     //         colorExitVerticalBg: "#ffff00ff", // màu ô chuyển bảng hàng dọc thành ngang
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
   },
-  // {
-  //   id: 64,
-  // type: "chdv",
-  // address_column: [1],
-  // room_column: [2],
-  // building_code_column: [null],
-  // price_column: [5],
-  //   name: "64 th office",
-  //   if: "caocap",
-  //   web: "64 th office",
-  //   link: "https://docs.google.com/spreadsheets/d/1uRk7VR8GwX73GjoJZG98tPMGJMNLaf08eDfLDjOJ-J8/edit?gid=1439806507#gid=",
-  //   scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-  //   list_address: [1439806507],
-  //   exit: ["kín"], // tên từ muốn lọc
-  //   exitColumn: 4, // trường này là trường trạng thái loại trừ
-  //   exitLinkDriver: 8, // trường này là trường link driver
-  //   column: [1, 2, null, 5], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
-  // },
+  {
+    id: 64,
+  type: "chdv",
+  address_column: [1],
+  room_column: [2],
+  building_code_column: [null],
+  price_column: [4],
+    name: "64 th office",
+    if: "caocap",
+    web: "64 th office",
+    link: "https://docs.google.com/spreadsheets/d/1uRk7VR8GwX73GjoJZG98tPMGJMNLaf08eDfLDjOJ-J8/edit?gid=1439806507#gid=1439806507",
+    //scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
+    list_address: [1439806507],
+    exit: ["kín"], // tên từ muốn lọc
+    exitColumn: 4, // trường này là trường trạng thái loại trừ
+    exitLinkDriver: 8, // trường này là trường link driver
+    column: [1, 2, null, 5], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
+    // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường
+    mota: [9], // trường này là trường cột mô tả 10,2 là gộp 2 cột lại. đưa cột tiện ích vào đây or khoảng "H1:L3"
+    header: 0, // dòng của tiêu đề nằm ngang
+    //         columnVertical: 1, // stt ô lấy màu bị hàng dọc
+    //         colorExitVerticalBg: "#ffff00ff", // màu ô chuyển bảng hàng dọc thành ngang
+    //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
+  },
   {
     id: 65,
     type: "chdv",
@@ -2937,7 +2952,7 @@
     name: "84 tnv vp",
     if: "caocap",
     web: "84 tnv vp",
-    link: "https://docs.google.com/spreadsheets/d/1uRk7VR8GwX73GjoJZG98tPMGJMNLaf08eDfLDjOJ-J8/edit?gid=1899046082#gid=",
+    link: "https://docs.google.com/spreadsheets/d/1ciqbC3w1gL00bLseYCG9nwoLBV240k5_yZbR-oXF9Oc/edit?gid=0#gid=0",
     scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
     list_address: [1899046082],
     exit: ["kín"], // tên từ muốn lọc
