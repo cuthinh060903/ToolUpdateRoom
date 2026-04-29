@@ -816,9 +816,10 @@ async function runAuditFlow(options = {}) {
 
       for (const sheetGid of config.list_address || []) {
         let processedRows = [];
+        let processResult = null;
 
         try {
-          processedRows = (await updater.processCsvData(config, sheetGid)) || [];
+          processResult = await updater.processCsvData(config, sheetGid);
         } catch (error) {
           const sourceError = {
             cdt_id: config.id,
@@ -832,6 +833,33 @@ async function runAuditFlow(options = {}) {
           configSourceErrors.push(sourceError);
           executionContext.source_error_count += 1;
           continue;
+        }
+
+        if (Array.isArray(processResult)) {
+          // Backward compatible with old processCsvData() return shape.
+          processedRows = processResult;
+        } else if (processResult && typeof processResult === "object") {
+          processedRows = Array.isArray(processResult.rows)
+            ? processResult.rows
+            : [];
+
+          if (Array.isArray(processResult.sourceErrors)) {
+            for (const sourceErrorText of processResult.sourceErrors) {
+              const sourceError = {
+                cdt_id: config.id,
+                cdt_name: config.web,
+                source: config.web,
+                sheet_gid: sheetGid,
+                step: "processCsvDataSource",
+                message: sourceErrorText,
+              };
+              sourceErrors.push(sourceError);
+              configSourceErrors.push(sourceError);
+              executionContext.source_error_count += 1;
+            }
+          }
+        } else {
+          processedRows = [];
         }
 
         executionContext.processed_sheet_count += 1;
