@@ -1,8 +1,8 @@
 param(
   [string]$RepoRoot,
-  [string]$EntryScript = "index.js",
+  [string]$EntryScript = "scripts/run-all-daily.js",
   [string]$LogDir = "logs",
-  [string]$LogPrefix = "daily-run",
+  [string]$LogPrefix = "all-run",
   [int]$LogRetentionDays = 3,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$ScriptArgs
@@ -21,7 +21,7 @@ $resolvedLogDir = Join-Path $RepoRoot $LogDir
 New-Item -ItemType Directory -Force -Path $resolvedLogDir | Out-Null
 
 if ([string]::IsNullOrWhiteSpace($LogPrefix)) {
-  $LogPrefix = "daily-run"
+  $LogPrefix = "all-run"
 }
 
 $invalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()

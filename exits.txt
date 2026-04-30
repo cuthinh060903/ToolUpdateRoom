@@ -4830,3 +4830,5 @@ Dspt -C Phương-Happy Homes-0369466813|chdv|gid:1103043570|addr:1|room:7|code:|
 81|hybrid|gid:952481791|addr:|room:1|code:|price:2|exitCol:5|exitDriver:6|header:|26/4/2026-15:02:42|TRUE
 81|hybrid|gid:952481791|addr:|room:1|code:|price:2|exitCol:5|exitDriver:6|header:|26/4/2026-15:24:19|TRUE
 132|hybrid|gid:246641757|addr:2|room:4|code:|price:6|exitCol:8|exitDriver:7|header:5|26/4/2026-15:36:26|TRUE
+3 4ps|chdv|gid:815077823|addr:2|room:3|code:|price:4|exitCol:6|exitDriver:7|header:2|29/4/2026-15:11:57|TRUE
+4 hallo|chdv|gid:0|addr:1|room:4|code:|price:6|exitCol:7|exitDriver:10|header:2|29/4/2026-15:15:15|TRUE
