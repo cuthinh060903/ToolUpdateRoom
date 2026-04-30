@@ -385,14 +385,14 @@ npm run audit:room -- --rule1-hours=12
 - `--use-api=true|false`: enable or disable API enrichment.
 - `--limit=10`: stop after a specific number of audit rows.
 - `--rule1-hours=24`: change the stale threshold for Rule 1.
-- `--test-errors=1,2,3...11`: chỉ chạy test các nhóm lỗi được chọn (1=II.A.1, 2=II.A.2, 3=II.A.3, 4=II.B.4, ..., 9=II.B.9, 10=II.B.10, 11=II.B.11).
+- `--test-errors=1,2,3...12`: chỉ chạy test các nhóm lỗi được chọn (1=II.A.1, 2=II.A.2, 3=II.A.3, 4=II.B.4, ..., 9=II.B.9, 10=II.B.10, 11=II.B.11, 12=II.B.12).
 - `--send-telegram=true|false`: gửi hoặc tắt gửi Telegram room-audit.
 - `--sync-report-sheet=true|false`: ghi hoặc tắt ghi Google Sheet báo cáo room-audit.
 - `--report-sheet-spreadsheet-id=...`: override spreadsheet báo cáo (mặc định của chú).
 - `--report-sheet-gid=297377874`: override sheet gid báo cáo.
 - `--report-sheet-header-row=1`: hàng chứa ngày.
 - `--report-sheet-first-data-row=2`: hàng bắt đầu ghi dữ liệu.
-- `--report-sheet-last-data-row=13`: hàng kết thúc ghi dữ liệu.
+- `--report-sheet-last-data-row=14`: hàng kết thúc ghi dữ liệu.
 - `--report-sheet-start-column=7`: cột ngày đầu tiên (7 = G).
 - `--report-sheet-day-window-size=10`: chỉ dùng tối đa 10 cột ngày; đầy vòng sẽ quay về cột bắt đầu để ghi đè.
 - `--openclaw-workspace-dir="C:/path/to/workspace"`: override the OpenClaw copy target for this run only.
@@ -409,7 +409,7 @@ Google Sheet daily report rule:
 - Sheet target mặc định: `11EyNOVAMn7ei-J8svcMjpvv1B7AashTUDyRB-gUeHho` (gid `297377874`)
 - Mỗi ngày dùng 1 cột, bắt đầu từ cột `G`
 - Chỉ dùng tối đa 10 cột ngày (`G -> P`), khi đầy vòng sẽ quay lại `G` để ghi đè báo cáo mới
-- Nếu chạy lại trong cùng ngày: xóa nội dung cột ngày hiện tại (`row 2..11`) rồi ghi lại dữ liệu mới
+- Nếu chạy lại trong cùng ngày: xóa nội dung cột ngày hiện tại (`row 2..14`) rồi ghi lại dữ liệu mới
 - Nếu sang ngày mới: ghi sang cột kế bên phải
 
 Telegram report rule:
