@@ -25,6 +25,7 @@
     "schedule:cancel:room-audit": "powershell -ExecutionPolicy Bypass -File .\\scripts\\remove-daily-task.ps1 -TaskName \"ToolUpdateRoom-RoomAudit-Daily\"",
     "schedule:create:all": "powershell -ExecutionPolicy Bypass -File .\\scripts\\register-daily-task.ps1 -TaskName \"ToolUpdateRoom-All-Daily\" -EntryScript \"scripts/run-all-daily.js\" -LogPrefix \"all-run\"",
     "schedule:cancel:all": "powershell -ExecutionPolicy Bypass -File .\\scripts\\remove-daily-task.ps1 -TaskName \"ToolUpdateRoom-All-Daily\"",
+    "schedule:cleanup:legacy": "powershell -ExecutionPolicy Bypass -Command \"$tasks=@('ToolUpdateRoom-TrongKin-Daily','ToolUpdateRoom-RoomAudit-Daily','ToolUpdateRoom-TwiceDaily'); foreach($t in $tasks){ schtasks /Query /TN $t *> $null; if($LASTEXITCODE -eq 0){ schtasks /Delete /TN $t /F *> $null; Write-Host \\\"[scheduler] Deleted $t\\\" } else { Write-Host \\\"[scheduler] Skip missing $t\\\" } }\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
   },

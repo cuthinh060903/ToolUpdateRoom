@@ -63,6 +63,43 @@ if ($ScriptArgs.Count -gt 0) {
   Write-Host "[scheduler] Script args: $($ScriptArgs -join ' ')"
 }
 
+$nodeVersionOutput = (& $nodeCommand.Source --version 2>$null)
+if ($nodeVersionOutput -match "^v(\d+)") {
+  $nodeMajorVersion = [int]$Matches[1]
+  if ($nodeMajorVersion -ge 23) {
+    $nodeWarning = "[scheduler] WARNING: Detected Node.js $nodeVersionOutput. Runtime crash 0xC0000409 has been observed on some Windows setups with newer Node builds. Prefer Node.js 20/22 LTS for scheduler stability."
+    Write-Host $nodeWarning
+    Add-Content -Path $logFile -Value $nodeWarning
+  }
+}
+
+$mutexName = $env.TOOLUPDATEROOM_MUTEX_NAME
+if ([string]::IsNullOrWhiteSpace($mutexName)) {
+  $mutexName = "Global\ToolUpdateRoom-Run-Lock"
+}
+
+$runMutex = $null
+$hasRunMutex = $false
+try {
+  $createdNew = $false
+  $runMutex = New-Object System.Threading.Mutex($false, $mutexName, [ref]$createdNew)
+  $hasRunMutex = $runMutex.WaitOne(0)
+} catch {
+  $mutexError = "[scheduler] WARNING: Failed to initialize run mutex '$mutexName'. Continue without cross-task lock. Error: $($_.Exception.Message)"
+  Write-Warning $mutexError
+  Add-Content -Path $logFile -Value $mutexError
+}
+
+if (-not $hasRunMutex) {
+  $skipMessage = "[scheduler] Skipped trigger because another ToolUpdateRoom run is still active (mutex=$mutexName)."
+  Write-Host $skipMessage
+  Add-Content -Path $logFile -Value $skipMessage
+  if ($runMutex) {
+    $runMutex.Dispose()
+  }
+  return
+}
+
 function Quote-CmdArgument([string]$value) {
   if ($null -eq $value) {
     return '""'
@@ -81,19 +118,31 @@ if ($ScriptArgs) {
   $commandParts += $ScriptArgs | ForEach-Object { Quote-CmdArgument $_ }
 }
 
-$nativeCommand = ($commandParts -join " ") + " >> " + (Quote-CmdArgument $logFile) + " 2>&1"
-& cmd.exe /d /c $nativeCommand
-$exitCode = $LASTEXITCODE
+try {
+  $nativeCommand = ($commandParts -join " ") + " >> " + (Quote-CmdArgument $logFile) + " 2>&1"
+  & cmd.exe /d /c $nativeCommand
+  $exitCode = $LASTEXITCODE
 
-Add-Content -Path $logFile -Value ""
-Add-Content -Path $logFile -Value "[scheduler] Exit code: $exitCode"
+  Add-Content -Path $logFile -Value ""
+  Add-Content -Path $logFile -Value "[scheduler] Exit code: $exitCode"
 
-if ($exitCode -eq -1073740791) {
-  Add-Content -Path $logFile -Value "[scheduler] Detected STATUS_STACK_BUFFER_OVERRUN (0xC0000409). This is a process-level crash (often native/runtime abort), not a normal JS exception."
+  if ($exitCode -eq -1073740791) {
+    Add-Content -Path $logFile -Value "[scheduler] Detected STATUS_STACK_BUFFER_OVERRUN (0xC0000409). This is a process-level crash (often native/runtime abort), not a normal JS exception."
+  }
+
+  if ($exitCode -ne 0) {
+    throw "Tool exited with code $exitCode. See log: $logFile"
+  }
+
+  Write-Host "[scheduler] Run completed successfully."
+} finally {
+  if ($hasRunMutex -and $runMutex) {
+    try {
+      [void]$runMutex.ReleaseMutex()
+    } catch {
+      Write-Warning "[scheduler] Failed to release mutex '$mutexName': $($_.Exception.Message)"
+    } finally {
+      $runMutex.Dispose()
+    }
+  }
 }
-
-if ($exitCode -ne 0) {
-  throw "Tool exited with code $exitCode. See log: $logFile"
-}
-
-Write-Host "[scheduler] Run completed successfully."

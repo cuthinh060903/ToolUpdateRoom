@@ -5,7 +5,8 @@ param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
   [string]$EntryScript = "scripts/run-all-daily.js",
   [string]$LogPrefix = "all-run",
-  [string[]]$ScriptArgs = @()
+  [string[]]$ScriptArgs = @(),
+  [switch]$DisableLegacyTasks = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +26,25 @@ if ($normalizedEntryScript -ne $combinedEntryScript.ToLower()) {
 
 if ([string]::IsNullOrWhiteSpace($LogPrefix) -or $LogPrefix -in @("daily-run", "trong-kin-run", "room-audit-run")) {
   $LogPrefix = "all-run"
+}
+
+function Disable-TaskIfExists([string]$Name) {
+  if ([string]::IsNullOrWhiteSpace($Name)) {
+    return
+  }
+
+  & schtasks /Query /TN $Name *> $null
+  if ($LASTEXITCODE -ne 0) {
+    return
+  }
+
+  & schtasks /End /TN $Name *> $null
+  & schtasks /Change /TN $Name /Disable *> $null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Warning "[scheduler] Disabled legacy task '$Name' to prevent overlap with combined flow."
+  } else {
+    Write-Warning "[scheduler] Found legacy task '$Name' but failed to disable it."
+  }
 }
 
 function Quote-PowerShellArgument([string]$value) {
@@ -94,4 +114,16 @@ Write-Host "[scheduler] Repo root: $RepoRoot"
 Write-Host "[scheduler] Entry script: $EntryScript"
 if ($ScriptArgs.Count -gt 0) {
   Write-Host "[scheduler] Script args: $($ScriptArgs -join ' ')"
+}
+
+if ($DisableLegacyTasks -and $TaskName -eq "ToolUpdateRoom-All-Daily") {
+  @(
+    "ToolUpdateRoom-TrongKin-Daily",
+    "ToolUpdateRoom-RoomAudit-Daily",
+    "ToolUpdateRoom-TwiceDaily"
+  ) | ForEach-Object {
+    if ($_ -ne $TaskName) {
+      Disable-TaskIfExists $_
+    }
+  }
 }

@@ -10,7 +10,7 @@ const DEFAULT_REPORT_SHEET = {
   sheetGid: 297377874,
   headerRow: 1,
   firstDataRow: 2,
-  lastDataRow: 13,
+  lastDataRow: 14,
   firstDayColumn: 7,
   dayColumnWindowSize: 10,
 };
@@ -236,6 +236,35 @@ function collectUniqueSortedCdtIds(values = []) {
 function cdtListText(values = []) {
   const ids = collectUniqueSortedCdtIds(values);
   return ids.length > 0 ? ids.join(", ") : "Không phát hiện lỗi";
+}
+
+function collectVacantRoomCountByCdt(rows = []) {
+  const countByCdtId = new Map();
+
+  rows.forEach((row) => {
+    const cdtId = normalizeText(row?.cdt_id);
+    if (!cdtId) {
+      return;
+    }
+
+    countByCdtId.set(cdtId, (countByCdtId.get(cdtId) || 0) + 1);
+  });
+
+  return collectUniqueSortedCdtIds([...countByCdtId.keys()]).map((cdtId) => ({
+    cdtId,
+    count: countByCdtId.get(cdtId) || 0,
+  }));
+}
+
+function vacantRoomCountByCdtText(rows = []) {
+  const counts = collectVacantRoomCountByCdt(rows).filter(
+    (item) => item.count > 0,
+  );
+  if (counts.length === 0) {
+    return "Không có CĐT có phòng trống";
+  }
+
+  return counts.map((item) => `${item.cdtId} (${item.count})`).join(", ");
 }
 
 function rowHasAnyReason(row = {}, reasonSet = new Set()) {
@@ -687,8 +716,11 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
         )}`
       : `II.B.10: ${nonSelectedText}`,
     includeError(11)
-      ? `II.B.11: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
+      ? `II.B.11: Các CĐT có phòng trống: ${vacantRoomCountByCdtText(rows)}`
       : `II.B.11: ${nonSelectedText}`,
+    includeError(12)
+      ? `II.B.12: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
+      : `II.B.12: ${nonSelectedText}`,
   ];
 
   return {
