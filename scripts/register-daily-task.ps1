@@ -33,8 +33,26 @@ function Disable-TaskIfExists([string]$Name) {
     return
   }
 
-  & schtasks /Query /TN $Name *> $null
-  if ($LASTEXITCODE -ne 0) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  $hadNativePreference = $null -ne (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue)
+  if ($hadNativePreference) {
+    $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+    $PSNativeCommandUseErrorActionPreference = $false
+  }
+
+  $queryExitCode = 0
+  try {
+    $ErrorActionPreference = "Continue"
+    & schtasks /Query /TN $Name *> $null
+    $queryExitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+    if ($hadNativePreference) {
+      $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+    }
+  }
+
+  if ($queryExitCode -ne 0) {
     return
   }
 
