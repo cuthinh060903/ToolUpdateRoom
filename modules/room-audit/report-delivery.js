@@ -682,12 +682,12 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
         )}`
       : `II.B.9: ${nonSelectedText}`,
     includeError(10)
-      ? `II.B.10: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
-      : `II.B.10: ${nonSelectedText}`,
-    includeError(11)
-      ? `II.B.11: Các CĐT có cấu trúc bảng không đầy đủ: ${cdtListText(
+      ? `II.B.10: Các CĐT có cấu trúc bảng không đầy đủ: ${cdtListText(
           collectIncompleteStructureCdtIds(),
         )}`
+      : `II.B.10: ${nonSelectedText}`,
+    includeError(11)
+      ? `II.B.11: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
       : `II.B.11: ${nonSelectedText}`,
   ];
 

@@ -1,16 +1,31 @@
 param(
-  [string]$TaskName = "ToolUpdateRoom-Daily",
+  [string]$TaskName = "ToolUpdateRoom-All-Daily",
   [Alias("Time")]
   [string[]]$Times = @("05:00"),
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
-  [string]$EntryScript = "index.js",
-  [string]$LogPrefix = "daily-run",
+  [string]$EntryScript = "scripts/run-all-daily.js",
+  [string]$LogPrefix = "all-run",
   [string[]]$ScriptArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
 
 $runScriptPath = Join-Path $PSScriptRoot "run-daily.ps1"
+$combinedEntryScript = "scripts/run-all-daily.js"
+
+$entryScriptText = ""
+if ($null -ne $EntryScript) {
+  $entryScriptText = $EntryScript.ToString()
+}
+$normalizedEntryScript = ($entryScriptText.Trim() -replace "\\", "/").ToLower()
+if ($normalizedEntryScript -ne $combinedEntryScript.ToLower()) {
+  Write-Warning "[scheduler] Auto schedule is forced to combined flow (trong-kin -> room-audit). Overriding EntryScript '$EntryScript' -> '$combinedEntryScript'."
+  $EntryScript = $combinedEntryScript
+}
+
+if ([string]::IsNullOrWhiteSpace($LogPrefix) -or $LogPrefix -in @("daily-run", "trong-kin-run", "room-audit-run")) {
+  $LogPrefix = "all-run"
+}
 
 function Quote-PowerShellArgument([string]$value) {
   if ($null -eq $value) {
