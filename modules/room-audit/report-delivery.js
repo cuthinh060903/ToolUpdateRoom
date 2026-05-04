@@ -10,13 +10,13 @@ const DEFAULT_REPORT_SHEET = {
   sheetGid: 297377874,
   headerRow: 1,
   firstDataRow: 2,
-  lastDataRow: 14,
+  lastDataRow: 15,
   firstDayColumn: 7,
   dayColumnWindowSize: 10,
 };
 
 const ADDRESS_FIELD_REASONS = new Set(["ADDRESS_MISSING"]);
-// II.B.5 = setup "tên phòng" column smells wrong. Do not use ROOM_NOT_MATCHED_* (API/sync)
+// II.B.2 = setup "tên phòng" column smells wrong. Do not use ROOM_NOT_MATCHED_* (API/sync)
 // or ROOM_NAME_MISSING (empty row) — those are not column-misalignment signals.
 const ROOM_NAME_FIELD_REASONS = new Set(["ROOM_NAME_LOOKS_LIKE_PRICE"]);
 const PRICE_FIELD_REASONS = new Set([
@@ -312,6 +312,30 @@ function buildCode3CdtWithLinkText(sourceErrors = []) {
     .join(", ");
 }
 
+function collectSourceErrorCdtIdsByLinkIndex(sourceErrors = [], targetIndex = null) {
+  if (!Array.isArray(sourceErrors) || targetIndex === null) {
+    return [];
+  }
+
+  const cdtIds = [];
+  sourceErrors.forEach((sourceError) => {
+    const cdtId = sourceError?.cdt_id;
+    if (cdtId === null || cdtId === undefined) {
+      return;
+    }
+
+    const sourceLabels = parseSourceLabelsFromErrorMessage(sourceError?.message);
+    const hasTargetIndex = sourceLabels.some(
+      (label) => mapSourceLabelToLinkIndex(label) === targetIndex,
+    );
+    if (hasTargetIndex) {
+      cdtIds.push(cdtId);
+    }
+  });
+
+  return cdtIds;
+}
+
 function collectVacantRoomCountByCdt(rows = []) {
   const countByCdtId = new Map();
 
@@ -357,7 +381,7 @@ function isRoomNameColumnError(row = {}) {
     return false;
   }
 
-  // II.B.5 is only about setup room-column on sheet, not API-side values.
+  // II.B.2 is only about setup room-column on sheet, not API-side values.
   return isPriceLikeRoomField(row.room_name);
 }
 
@@ -370,8 +394,8 @@ function isPriceColumnError(row = {}) {
 }
 
 function isImageColumnError(_row = {}) {
-  // II.B.7: không suy "lệch cột" từ IMAGE_* / INVALID_URL / text giống số phòng
-  // (nhãn ô "304", "Click"...). Thiếu link → II.B.8. Có thể bật lại khi có reason riêng.
+  // II.B.4: không suy "lệch cột" từ IMAGE_* / INVALID_URL / text giống số phòng
+  // (nhãn ô "304", "Click"...). Thiếu link → II.B.5. Có thể bật lại khi có reason riêng.
   return false;
 }
 
@@ -730,78 +754,123 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
   const includeError = (code) =>
     !isTestFilterEnabled || selectedErrorCodes.has(code);
 
+  const a1Line = includeError(1)
+    ? toolRan
+      ? `II.A.1: Tool có chạy. Tổng phòng trống: ${Number(
+          report?.total_empty_rooms_today ?? report?.total_rows ?? 0,
+        )}`
+      : "II.A.1: Tool không chạy. Tổng phòng trống: 0"
+    : `II.A.1: ${nonSelectedText}`;
+  const a2Line = includeError(2)
+    ? buildNoVacantLine(report)
+    : `II.A.2: ${nonSelectedText}`;
+  const a3Line = includeError(3)
+    ? `II.A.3: Các CĐT bị lỗi link bảng hàng đích: ${buildCode3CdtWithLinkText(
+        sourceErrors,
+      )}`
+    : `II.A.3: ${nonSelectedText}`;
+  const a41Line = includeError(4)
+    ? `II.A.4.1: Các CĐT chạy link gốc: ${cdtListText(
+        collectSourceErrorCdtIdsByLinkIndex(sourceErrors, 1),
+      )}`
+    : `II.A.4.1: ${nonSelectedText}`;
+  const a42Line = includeError(4)
+    ? `II.A.4.2: Các CĐT chạy link đích: ${cdtListText(
+        collectSourceErrorCdtIdsByLinkIndex(sourceErrors, 2),
+      )}`
+    : `II.A.4.2: ${nonSelectedText}`;
+  const a4SheetLine = `${a41Line}\n${a42Line}`;
+
+  const b1Line = includeError(5)
+    ? `II.B.1: Các CĐT bị lệch cột "địa chỉ" ở setup tool: ${cdtListText(
+        rows
+          .filter((row) => isAddressColumnError(row))
+          .map((row) => row.cdt_id),
+      )}`
+    : `II.B.1: ${nonSelectedText}`;
+  const b2Line = includeError(6)
+    ? `II.B.2: Các CĐT bị lệch cột "tên phòng" ở setup tool: ${cdtListText(
+        rows
+          .filter((row) => isRoomNameColumnError(row))
+          .map((row) => row.cdt_id),
+      )}`
+    : `II.B.2: ${nonSelectedText}`;
+  const b3Line = includeError(7)
+    ? `II.B.3: Các CĐT bị lệch cột "giá" ở setup tool: ${cdtListText(
+        rows
+          .filter((row) => isPriceColumnError(row))
+          .map((row) => row.cdt_id),
+      )}`
+    : `II.B.3: ${nonSelectedText}`;
+  const b4Line = includeError(8)
+    ? `II.B.4: Các CĐT bị lệch cột "link ảnh" ở setup tool: ${cdtListText(
+        rows
+          .filter((row) => isImageColumnError(row))
+          .map((row) => row.cdt_id),
+      )}`
+    : `II.B.4: ${nonSelectedText}`;
+  const b5Line = includeError(9)
+    ? `II.B.5: Các CĐT có phòng không có link ảnh ở setup tool: ${cdtListText(
+        rows
+          .filter((row) => isMissingImageLinkError(row))
+          .map((row) => row.cdt_id),
+      )}`
+    : `II.B.5: ${nonSelectedText}`;
+  const b6Line = includeError(10)
+    ? `II.B.6: Các CĐT có tòa mới: ${cdtListText(
+        collectNewBuildingCdtIds(report, now),
+      )}`
+    : `II.B.6: ${nonSelectedText}`;
+  const b7Line = includeError(11)
+    ? `II.B.7: Các CĐT có cấu trúc bảng không đầy đủ: ${cdtListText(
+        collectIncompleteStructureCdtIds(),
+      )}`
+    : `II.B.7: ${nonSelectedText}`;
+  const b8Line = includeError(12)
+    ? `II.B.8: Các CĐT có phòng trống: ${vacantRoomCountByCdtText(rows)}`
+    : `II.B.8: ${nonSelectedText}`;
+  const b9Line = includeError(13)
+    ? `II.B.9: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
+    : `II.B.9: ${nonSelectedText}`;
+
   const lines = [
-    includeError(1)
-      ? toolRan
-        ? `II.A.1: Tool có chạy. Tổng phòng trống: ${Number(
-            report?.total_empty_rooms_today ?? report?.total_rows ?? 0,
-          )}`
-        : "II.A.1: Tool không chạy. Tổng phòng trống: 0"
-      : `II.A.1: ${nonSelectedText}`,
-    includeError(2) ? buildNoVacantLine(report) : `II.A.2: ${nonSelectedText}`,
-    includeError(3)
-      ? `II.A.3: Các CĐT bị lỗi link bảng hàng đích: ${buildCode3CdtWithLinkText(
-          sourceErrors,
-        )}`
-      : `II.A.3: ${nonSelectedText}`,
-    includeError(4)
-      ? `II.B.4: Các CĐT bị lệch cột "địa chỉ" ở setup tool: ${cdtListText(
-          rows
-            .filter((row) => isAddressColumnError(row))
-            .map((row) => row.cdt_id),
-        )}`
-      : `II.B.4: ${nonSelectedText}`,
-    includeError(5)
-      ? `II.B.5: Các CĐT bị lệch cột "tên phòng" ở setup tool: ${cdtListText(
-          rows
-            .filter((row) => isRoomNameColumnError(row))
-            .map((row) => row.cdt_id),
-        )}`
-      : `II.B.5: ${nonSelectedText}`,
-    includeError(6)
-      ? `II.B.6: Các CĐT bị lệch cột "giá" ở setup tool: ${cdtListText(
-          rows
-            .filter((row) => isPriceColumnError(row))
-            .map((row) => row.cdt_id),
-        )}`
-      : `II.B.6: ${nonSelectedText}`,
-    includeError(7)
-      ? `II.B.7: Các CĐT bị lệch cột "link ảnh" ở setup tool: ${cdtListText(
-          rows
-            .filter((row) => isImageColumnError(row))
-            .map((row) => row.cdt_id),
-        )}`
-      : `II.B.7: ${nonSelectedText}`,
-    includeError(8)
-      ? `II.B.8: Các CĐT có phòng không có link ảnh ở setup tool: ${cdtListText(
-          rows
-            .filter((row) => isMissingImageLinkError(row))
-            .map((row) => row.cdt_id),
-        )}`
-      : `II.B.8: ${nonSelectedText}`,
-    includeError(9)
-      ? `II.B.9: Các CĐT có tòa mới: ${cdtListText(
-          collectNewBuildingCdtIds(report, now),
-        )}`
-      : `II.B.9: ${nonSelectedText}`,
-    includeError(10)
-      ? `II.B.10: Các CĐT có cấu trúc bảng không đầy đủ: ${cdtListText(
-          collectIncompleteStructureCdtIds(),
-        )}`
-      : `II.B.10: ${nonSelectedText}`,
-    includeError(11)
-      ? `II.B.11: Các CĐT có phòng trống: ${vacantRoomCountByCdtText(rows)}`
-      : `II.B.11: ${nonSelectedText}`,
-    includeError(12)
-      ? `II.B.12: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
-      : `II.B.12: ${nonSelectedText}`,
+    a1Line,
+    a2Line,
+    a3Line,
+    a4SheetLine,
+    b1Line,
+    b2Line,
+    b3Line,
+    b4Line,
+    b5Line,
+    b6Line,
+    b7Line,
+    b8Line,
+    b9Line,
+  ];
+
+  const telegramLines = [
+    a1Line,
+    a2Line,
+    a3Line,
+    a41Line,
+    a42Line,
+    b1Line,
+    b2Line,
+    b3Line,
+    b4Line,
+    b5Line,
+    b6Line,
+    b7Line,
+    b8Line,
+    b9Line,
   ];
 
   return {
     dayHeader: labels.dayHeader,
     timestamp: labels.timestamp,
     lines,
-    messages: [labels.timestamp, ...lines],
+    messages: [labels.timestamp, ...telegramLines],
   };
 }
 
@@ -1048,7 +1117,7 @@ function splitLongTelegramMessage(message = "", maxLength = 3500) {
     return [text];
   }
 
-  const labeledListMatch = text.match(/^(II\.[AB]\.\d+:\s*)(.+)$/s);
+  const labeledListMatch = text.match(/^(II\.[AB]\.\d+(?:\.\d+)?:\s*)(.+)$/s);
   if (labeledListMatch) {
     const prefix = labeledListMatch[1];
     const body = labeledListMatch[2];

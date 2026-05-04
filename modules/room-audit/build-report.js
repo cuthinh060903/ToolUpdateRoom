@@ -777,7 +777,7 @@ const SHEET_ADDRESS_FIELD_REASONS = new Set([
   "ADDRESS_MISSING",
 ]);
 
-// Align with report-delivery II.B.5: sheet room-column issues, not API mismatch or price column.
+// Align with report-delivery II.B.2: sheet room-column issues, not API mismatch or price column.
 const SHEET_ROOM_NAME_FIELD_REASONS = new Set([
   "ROOM_NAME_LOOKS_LIKE_PRICE",
 ]);
