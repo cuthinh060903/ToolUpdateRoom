@@ -46,7 +46,7 @@ function parseErrorCodeList(value) {
     .toString()
     .split(",")
     .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 12);
+    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 13);
 }
 
 function parseArgs(argv = []) {
