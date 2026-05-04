@@ -1,4 +1,4 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 const path = require("path");
 const { google } = require("googleapis");
 const { sendTelegramMessage } = require("../../telegram_bot");
@@ -236,6 +236,80 @@ function collectUniqueSortedCdtIds(values = []) {
 function cdtListText(values = []) {
   const ids = collectUniqueSortedCdtIds(values);
   return ids.length > 0 ? ids.join(", ") : "Không phát hiện lỗi";
+}
+
+function parseSourceLabelsFromErrorMessage(message = "") {
+  const text = normalizeText(message);
+  if (!text) {
+    return [];
+  }
+
+  const labels = new Set();
+  const matches = text.match(/\bAI0\b|\bAI1\b|\bAI2\b|\bMANUAL3\b/gi) || [];
+  matches.forEach((label) => labels.add(label.toUpperCase()));
+  return [...labels];
+}
+
+function mapSourceLabelToLinkIndex(label = "") {
+  const normalizedLabel = normalizeText(label).toUpperCase();
+  if (!normalizedLabel) {
+    return null;
+  }
+
+  if (normalizedLabel === "AI0") {
+    return 1;
+  }
+
+  if (["AI1", "AI2", "MANUAL3"].includes(normalizedLabel)) {
+    return 2;
+  }
+
+  return null;
+}
+
+function buildCode3CdtWithLinkText(sourceErrors = []) {
+  if (!Array.isArray(sourceErrors) || sourceErrors.length === 0) {
+    return "Không phát hiện lỗi";
+  }
+
+  const cdtToLinkIndexes = new Map();
+
+  sourceErrors.forEach((sourceError) => {
+    const cdtId = normalizeText(sourceError?.cdt_id);
+    if (!cdtId) {
+      return;
+    }
+
+    if (!cdtToLinkIndexes.has(cdtId)) {
+      cdtToLinkIndexes.set(cdtId, new Set());
+    }
+
+    const linkIndexes = cdtToLinkIndexes.get(cdtId);
+    const sourceLabels = parseSourceLabelsFromErrorMessage(sourceError?.message);
+    sourceLabels.forEach((label) => {
+      const linkIndex = mapSourceLabelToLinkIndex(label);
+      if (linkIndex !== null) {
+        linkIndexes.add(linkIndex);
+      }
+    });
+  });
+
+  const sortedCdtIds = collectUniqueSortedCdtIds([...cdtToLinkIndexes.keys()]);
+  if (sortedCdtIds.length === 0) {
+    return "Không phát hiện lỗi";
+  }
+
+  return sortedCdtIds
+    .map((cdtId) => {
+      const linkIndexes = [...(cdtToLinkIndexes.get(cdtId) || [])].sort(
+        (a, b) => a - b,
+      );
+      if (linkIndexes.length === 0) {
+        return cdtId;
+      }
+      return `${cdtId} (${linkIndexes.join(",")})`;
+    })
+    .join(", ");
 }
 
 function collectVacantRoomCountByCdt(rows = []) {
@@ -666,8 +740,8 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
       : `II.A.1: ${nonSelectedText}`,
     includeError(2) ? buildNoVacantLine(report) : `II.A.2: ${nonSelectedText}`,
     includeError(3)
-      ? `II.A.3: Các CĐT bị lỗi link bảng hàng đích: ${cdtListText(
-          sourceErrors.map((item) => item?.cdt_id),
+      ? `II.A.3: Các CĐT bị lỗi link bảng hàng đích: ${buildCode3CdtWithLinkText(
+          sourceErrors,
         )}`
       : `II.A.3: ${nonSelectedText}`,
     includeError(4)
@@ -740,6 +814,42 @@ function toColumnLetter(index1Based) {
     value = Math.floor((value - 1) / 26);
   }
   return result;
+}
+
+function parseDayHeaderTimestamp(value = "") {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (!match) {
+    return null;
+  }
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  let year = Number(match[3]);
+
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
+    return null;
+  }
+
+  if (year < 100) {
+    year += 2000;
+  }
+
+  const parsed = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getDate() !== day ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getFullYear() !== year
+  ) {
+    return null;
+  }
+
+  return parsed.getTime();
 }
 
 async function resolveSheetMetaByGid(sheets, spreadsheetId, sheetGid) {
@@ -836,7 +946,41 @@ async function syncReportSheet(reportPayload, options = {}) {
   }
 
   if (targetColumnIndex < 0) {
-    targetColumnIndex = windowStart;
+    const windowHeaders = [];
+    for (let index = windowStart - 1; index <= windowEnd - 1; index += 1) {
+      const headerText = normalizeText(headerRowValues[index]);
+      const timestamp = parseDayHeaderTimestamp(headerText);
+      if (!Number.isFinite(timestamp)) {
+        continue;
+      }
+
+      windowHeaders.push({
+        columnIndex: index + 1,
+        timestamp,
+      });
+    }
+
+    if (windowHeaders.length > 0) {
+      const newestHeader = windowHeaders.reduce((latest, current) => {
+        if (current.timestamp > latest.timestamp) {
+          return current;
+        }
+        if (
+          current.timestamp === latest.timestamp &&
+          current.columnIndex > latest.columnIndex
+        ) {
+          return current;
+        }
+        return latest;
+      });
+
+      targetColumnIndex =
+        newestHeader.columnIndex >= windowEnd
+          ? windowStart
+          : newestHeader.columnIndex + 1;
+    } else {
+      targetColumnIndex = windowStart;
+    }
   }
 
   const existingHeader = normalizeText(headerRowValues[targetColumnIndex - 1]);
@@ -1056,3 +1200,4 @@ module.exports = {
   deliverRoomAuditReport,
   sendRoomAuditTelegramStatus,
 };
+
