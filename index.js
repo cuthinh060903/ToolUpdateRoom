@@ -138,29 +138,157 @@ class UpdateRoomSari {
     });
   }
 
+  formatLockTimestamp(date = new Date()) {
+    const pad = (value) => value.toString().padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate(),
+    )}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(
+      date.getSeconds(),
+    )}`;
+  }
+
+  isProcessAlive(pid) {
+    const normalizedPid = Number(pid);
+    if (!Number.isFinite(normalizedPid) || normalizedPid <= 0) {
+      return false;
+    }
+
+    try {
+      process.kill(normalizedPid, 0);
+      return true;
+    } catch (error) {
+      // EPERM means process exists but cannot be signaled due to permissions.
+      if (error?.code === "EPERM") {
+        return true;
+      }
+      return false;
+    }
+  }
+
+  async moveCurrentLockToStale(reason = "stale_lock") {
+    const lockPath = this.mainRunLockPath;
+    const lockDir = path.dirname(lockPath);
+    const safeReason = this.normalizeSheetCellText(reason)
+      .replace(/[^a-z0-9_-]/gi, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    const stalePath = path.join(
+      lockDir,
+      `stale-main-updater-${this.formatLockTimestamp()}-${safeReason || "stale"}.lock`,
+    );
+
+    try {
+      await fs.rename(lockPath, stalePath);
+      return stalePath;
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        return "";
+      }
+      throw error;
+    }
+  }
+
+  async cleanupStaleMainRunLock() {
+    const lockPath = this.mainRunLockPath;
+    let rawLockContent = "";
+    try {
+      rawLockContent = await fs.readFile(lockPath, "utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        return { cleaned: false, reason: "lock_missing" };
+      }
+      throw error;
+    }
+
+    const trimmedContent = (rawLockContent || "").trim();
+    if (!trimmedContent) {
+      const stalePath = await this.moveCurrentLockToStale("empty_lock");
+      return { cleaned: Boolean(stalePath), reason: "empty_lock", stalePath };
+    }
+
+    let lockData = null;
+    try {
+      lockData = JSON.parse(trimmedContent);
+    } catch {
+      const stalePath = await this.moveCurrentLockToStale("invalid_json_lock");
+      return {
+        cleaned: Boolean(stalePath),
+        reason: "invalid_json_lock",
+        stalePath,
+      };
+    }
+
+    const lockPid = Number(lockData?.pid);
+    if (!Number.isFinite(lockPid) || lockPid <= 0) {
+      const stalePath = await this.moveCurrentLockToStale("missing_pid_lock");
+      return {
+        cleaned: Boolean(stalePath),
+        reason: "missing_pid_lock",
+        stalePath,
+      };
+    }
+
+    if (this.isProcessAlive(lockPid)) {
+      return { cleaned: false, reason: `active_pid_${lockPid}` };
+    }
+
+    const stalePath = await this.moveCurrentLockToStale(`dead_pid_${lockPid}`);
+    return {
+      cleaned: Boolean(stalePath),
+      reason: `dead_pid_${lockPid}`,
+      stalePath,
+    };
+  }
+
   async acquireMainRunLock() {
     const lockPath = this.mainRunLockPath;
     const lockDir = path.dirname(lockPath);
     await fs.mkdir(lockDir, { recursive: true });
 
-    try {
+    const writeNewLock = async () => {
       const handle = await fs.open(lockPath, "wx");
-      await handle.writeFile(
-        JSON.stringify(
-          {
-            pid: process.pid,
-            run_context: this.RUN_CONTEXT,
-            started_at: new Date().toISOString(),
-          },
-          null,
-          2,
-        ),
-        "utf8",
-      );
-      await handle.close();
+      try {
+        await handle.writeFile(
+          JSON.stringify(
+            {
+              pid: process.pid,
+              run_context: this.RUN_CONTEXT,
+              started_at: new Date().toISOString(),
+              cwd: process.cwd(),
+            },
+            null,
+            2,
+          ),
+          "utf8",
+        );
+      } finally {
+        await handle.close();
+      }
+    };
+
+    try {
+      await writeNewLock();
       return true;
     } catch (error) {
       if (error?.code === "EEXIST") {
+        const cleanupResult = await this.cleanupStaleMainRunLock();
+        if (cleanupResult?.cleaned) {
+          if (cleanupResult?.stalePath) {
+            console.warn(
+              `[run-lock] Phat hien lock cu (${cleanupResult.reason}), da chuyen sang ${cleanupResult.stalePath}.`,
+            );
+          }
+          try {
+            await writeNewLock();
+            return true;
+          } catch (retryError) {
+            if (retryError?.code === "EEXIST") {
+              return false;
+            }
+            throw retryError;
+          }
+        }
         return false;
       }
       throw error;
@@ -1787,6 +1915,42 @@ class UpdateRoomSari {
     return [{ roomRaw, priceRaw }];
   }
 
+  resolvePriceRawFromRow(row, primaryPriceCol, config = {}) {
+    const getCellValue = (column) => {
+      if (column === null || column === undefined || column === "") {
+        return null;
+      }
+      return row?.[`field${column}`]?.value;
+    };
+
+    const primaryValue = getCellValue(primaryPriceCol);
+    if (this.normalizeSheetCellText(primaryValue)) {
+      return primaryValue;
+    }
+
+    const fallbackColumnsRaw = Array.isArray(config?.price_fallback_columns)
+      ? config.price_fallback_columns
+      : Array.isArray(config?.price_fallback_column)
+        ? config.price_fallback_column
+        : config?.price_fallback_columns !== undefined
+          ? [config.price_fallback_columns]
+          : config?.price_fallback_column !== undefined
+            ? [config.price_fallback_column]
+            : [];
+
+    const fallbackColumns = fallbackColumnsRaw.filter(
+      (col) => col !== null && col !== undefined && col !== primaryPriceCol,
+    );
+    for (const fallbackCol of fallbackColumns) {
+      const fallbackValue = getCellValue(fallbackCol);
+      if (this.normalizeSheetCellText(fallbackValue)) {
+        return fallbackValue;
+      }
+    }
+
+    return primaryValue;
+  }
+
   extractHyperlinkFromFormula(formulaValue) {
     if (!formulaValue) {
       return null;
@@ -3186,6 +3350,9 @@ class UpdateRoomSari {
   getSheetSourceCandidates(huydev, idSheetUrl = null, sheetIndex = 0) {
     const candidates = [];
     const dedupe = new Set();
+    const preferPrioritySourcesFirst = Boolean(
+      huydev?.sheet_source_priority_first,
+    );
 
     const pushCandidate = (candidate = {}) => {
       const link = (candidate?.link || "").toString().trim();
@@ -3233,8 +3400,10 @@ class UpdateRoomSari {
       orderedGids.forEach((gid) => pushCandidate({ label, link, gid }));
     };
 
-    // Ưu tiên AI0: link bảng hàng trực tiếp của CDT.
-    pushSourceWithAutoGids("AI0", huydev?.link, idSheetUrl);
+    // Mặc định: giữ nguyên hành vi cũ, ưu tiên AI0 trước.
+    if (!preferPrioritySourcesFirst) {
+      pushSourceWithAutoGids("AI0", huydev?.link, idSheetUrl);
+    }
 
     const normalizedSheetSourcePriority = Array.isArray(huydev?.sheet_source_priority)
       ? huydev.sheet_source_priority
@@ -3257,6 +3426,15 @@ class UpdateRoomSari {
         `SOURCE_${sourceIndex + 1}`;
       pushSourceWithAutoGids(sourceLabel, sourceConfig.link, resolvedGid);
     });
+
+    // CDT đặc thù: ưu tiên nguồn trong `sheet_source_priority` trước, AI0 làm fallback.
+    if (preferPrioritySourcesFirst) {
+      pushSourceWithAutoGids("AI0", huydev?.link, idSheetUrl);
+      const ai0Candidates = candidates.filter((c) => c.label === "AI0");
+      const nonAi0Candidates = candidates.filter((c) => c.label !== "AI0");
+      candidates.length = 0;
+      candidates.push(...nonAi0Candidates, ...ai0Candidates);
+    }
 
     const legacyFallbackSources = [
       {
@@ -3354,24 +3532,59 @@ class UpdateRoomSari {
       const sheetTitle = sheet.properties.title;
       console.log(`📄 Sheet tìm thấy: ${sheetTitle} (gid: ${targetGid})`);
 
-      // 📌 Lấy thông tin màu nền của từng ô trong sheet
+      // 📌 Lấy dữ liệu ô + metadata ẩn hàng/cột của từng ô trong sheet
       const response = await sheets.spreadsheets.get({
         spreadsheetId,
-        ranges: [`${sheetTitle}`], // Lấy màu từ A1 đến Z100
+        ranges: [`${sheetTitle}`],
         includeGridData: true,
-        // fields: "sheets.data.rowData.values.effectiveFormat.backgroundColor"
+        fields:
+          "sheets(data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue,effectiveFormat.backgroundColor,effectiveFormat.textFormat.foregroundColor,userEnteredFormat.textFormat.link,textFormatRuns,chipRuns,hyperlink,note)),rowMetadata(hiddenByUser),columnMetadata(hiddenByUser)),properties(sheetId,title))",
       });
-      const getRows = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: sheetTitle,
-      });
-      const rows = getRows.data.values;
-      const data = response.data.sheets[0].data[0].rowData;
-      if (data && data.length && rows?.length) {
-        const jsonRows = rows.map((row, rowIndex) => {
+      const gridData = response?.data?.sheets?.[0]?.data?.[0] || {};
+      const rowData = Array.isArray(gridData?.rowData) ? gridData.rowData : [];
+      const rowMetadata = Array.isArray(gridData?.rowMetadata)
+        ? gridData.rowMetadata
+        : [];
+      const columnMetadata = Array.isArray(gridData?.columnMetadata)
+        ? gridData.columnMetadata
+        : [];
+      const startRow = Number(gridData?.startRow || 0);
+      const startColumn = Number(gridData?.startColumn || 0);
+
+      if (rowData.length > 0) {
+        const hiddenRows = new Set();
+        if (options?.ignoreHiddenRows) {
+          rowMetadata.forEach((meta, idx) => {
+            if (meta?.hiddenByUser) {
+              hiddenRows.add(startRow + idx);
+            }
+          });
+        }
+
+        const hiddenColumns = new Set();
+        if (options?.ignoreHiddenColumns) {
+          columnMetadata.forEach((meta, idx) => {
+            if (meta?.hiddenByUser) {
+              hiddenColumns.add(startColumn + idx);
+            }
+          });
+        }
+
+        const jsonRows = [];
+        rowData.forEach((row, rowOffset) => {
+          const absoluteRowIndex = startRow + rowOffset;
+          if (hiddenRows.has(absoluteRowIndex)) {
+            return;
+          }
+
           const obj = {};
-          row.forEach(async (value, colIndex) => {
-            const cell = data[rowIndex]?.values[colIndex];
+          const cells = Array.isArray(row?.values) ? row.values : [];
+          cells.forEach((cell, colOffset) => {
+            const absoluteColIndex = startColumn + colOffset;
+            if (hiddenColumns.has(absoluteColIndex)) {
+              return;
+            }
+
             const backgroundColor = cell?.effectiveFormat?.backgroundColor;
             const textColor =
               cell?.effectiveFormat?.textFormat?.foregroundColor;
@@ -3392,12 +3605,20 @@ class UpdateRoomSari {
                 )
               : null;
 
+            const cellEffectiveValue = cell?.effectiveValue || {};
+            const value =
+              cell?.formattedValue ??
+              cellEffectiveValue?.stringValue ??
+              cellEffectiveValue?.numberValue ??
+              cellEffectiveValue?.boolValue ??
+              "";
             const hyperlink = this.extractHyperlinkFromCell(cell);
             const formulaValue =
               cell?.userEnteredValue?.formulaValue ||
               cell?.userEnteredValue?.formula ||
               "";
-            obj[`field${colIndex}`] = {
+
+            obj[`field${absoluteColIndex}`] = {
               value,
               formula: formulaValue,
               bgColor: backgroundColorHex,
@@ -3406,7 +3627,10 @@ class UpdateRoomSari {
               note: cell?.note || "",
             };
           });
-          return obj;
+
+          if (Object.keys(obj).length > 0) {
+            jsonRows.push(obj);
+          }
         });
 
         return jsonRows;
@@ -3754,6 +3978,8 @@ class UpdateRoomSari {
             try {
               sheetData = await this.spreadsheets(spreadsheetId, gid, {
                 silentErrors: true,
+                ignoreHiddenRows: Boolean(huydev?.ignore_hidden_rows),
+                ignoreHiddenColumns: Boolean(huydev?.ignore_hidden_columns),
               });
             } catch (error) {
               const configuredLinkInfo = await this.extractGoogleSheetInfo(
@@ -3777,6 +4003,8 @@ class UpdateRoomSari {
               );
               sheetData = await this.spreadsheets(spreadsheetId, fallbackGid, {
                 silentErrors: true,
+                ignoreHiddenRows: Boolean(huydev?.ignore_hidden_rows),
+                ignoreHiddenColumns: Boolean(huydev?.ignore_hidden_columns),
               });
             }
           } else if (huydev.if == "binhthuong") {
@@ -4175,7 +4403,7 @@ class UpdateRoomSari {
 
           const roomEntries = this.extractRoomPriceEntries(
             row[`field${roomCol}`]?.value,
-            priceCol !== null ? row[`field${priceCol}`]?.value : null,
+            this.resolvePriceRawFromRow(row, priceCol, huydev),
             roomCol,
             priceCol,
             huydev,
