@@ -4,6 +4,8 @@ param(
   [string]$LogDir = "logs",
   [string]$LogPrefix = "all-run",
   [int]$LogRetentionDays = 3,
+  [ValidateSet("manual", "scheduler")]
+  [string]$RunSource = "scheduler",
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$ScriptArgs
 )
@@ -19,6 +21,9 @@ Set-Location $RepoRoot
 
 $resolvedLogDir = Join-Path $RepoRoot $LogDir
 New-Item -ItemType Directory -Force -Path $resolvedLogDir | Out-Null
+$lockDir = Join-Path $resolvedLogDir ".locks"
+New-Item -ItemType Directory -Force -Path $lockDir | Out-Null
+$activeRunInfoPath = Join-Path $lockDir "active-run.json"
 
 if ([string]::IsNullOrWhiteSpace($LogPrefix)) {
   $LogPrefix = "all-run"
@@ -56,9 +61,87 @@ $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $logFile = Join-Path $resolvedLogDir "$LogPrefix-$timestamp.log"
 $nodeCommand = Get-Command node -ErrorAction Stop
 
+function Normalize-EntryScriptPath([string]$value) {
+  if ([string]::IsNullOrWhiteSpace($value)) {
+    return ""
+  }
+
+  return ($value.Trim() -replace "\\", "/").ToLower()
+}
+
+function Test-HasArgPrefix([string[]]$ArgsToCheck, [string[]]$Prefixes) {
+  if (-not $ArgsToCheck -or -not $Prefixes) {
+    return $false
+  }
+
+  foreach ($argItem in $ArgsToCheck) {
+    $normalizedArg = ($argItem.ToString().Trim()).ToLower()
+    foreach ($prefix in $Prefixes) {
+      $normalizedPrefix = ($prefix.ToString().Trim()).ToLower()
+      if ($normalizedArg.StartsWith($normalizedPrefix)) {
+        return $true
+      }
+    }
+  }
+
+  return $false
+}
+
+function Get-ActiveRunInfo([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return $null
+  }
+
+  try {
+    $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+      return $null
+    }
+    return ($raw | ConvertFrom-Json -ErrorAction Stop)
+  } catch {
+    return $null
+  }
+}
+
+function Test-IsFullScopeManualCommand([string]$normalizedEntryScript, [string[]]$manualScriptArgs) {
+  $hasMainOnlyIdsEnv = -not [string]::IsNullOrWhiteSpace($env:RUN_ONLY_IDS)
+  $hasAuditOnlyIdsEnv = -not [string]::IsNullOrWhiteSpace($env:ROOM_AUDIT_ONLY_IDS)
+  $hasAuditErrorsEnv = -not [string]::IsNullOrWhiteSpace($env:ROOM_AUDIT_TEST_ERRORS)
+  $hasAuditLimitEnv = -not [string]::IsNullOrWhiteSpace($env:ROOM_AUDIT_LIMIT)
+
+  if ($normalizedEntryScript -eq "index.js") {
+    return -not $hasMainOnlyIdsEnv
+  }
+
+  if ($normalizedEntryScript -eq "modules/room-audit/index.js") {
+    $hasAuditFilterArg = Test-HasArgPrefix $manualScriptArgs @("--ids=", "--test-errors=", "--limit=")
+    return (-not $hasAuditFilterArg) -and (-not $hasAuditOnlyIdsEnv) -and (-not $hasAuditErrorsEnv) -and (-not $hasAuditLimitEnv)
+  }
+
+  if ($normalizedEntryScript -eq "scripts/run-all-daily.js") {
+    $hasCombinedFilterArg = Test-HasArgPrefix $manualScriptArgs @(
+      "--skip-all",
+      "--skip-main",
+      "--skip-room-audit",
+      "--room-audit-ids=",
+      "--room-audit-limit=",
+      "--room-audit-test-errors=",
+      "--room-audit-use-api=",
+      "--room-audit-debug="
+    )
+
+    return (-not $hasCombinedFilterArg) -and (-not $hasMainOnlyIdsEnv) -and (-not $hasAuditOnlyIdsEnv) -and (-not $hasAuditErrorsEnv) -and (-not $hasAuditLimitEnv)
+  }
+
+  return $false
+}
+
+$normalizedEntryScript = Normalize-EntryScriptPath $EntryScript
+
 Write-Host "[scheduler] Repo root: $RepoRoot"
 Write-Host "[scheduler] Entry script: $EntryScript"
 Write-Host "[scheduler] Log file: $logFile"
+Write-Host "[scheduler] Run source: $RunSource"
 if ($ScriptArgs.Count -gt 0) {
   Write-Host "[scheduler] Script args: $($ScriptArgs -join ' ')"
 }
@@ -80,6 +163,8 @@ if ([string]::IsNullOrWhiteSpace($mutexName)) {
 
 $runMutex = $null
 $hasRunMutex = $false
+$allowManualScopedRunWithoutMutex = $false
+$createdActiveRunInfo = $false
 try {
   $createdNew = $false
   $runMutex = New-Object System.Threading.Mutex($false, $mutexName, [ref]$createdNew)
@@ -91,13 +176,42 @@ try {
 }
 
 if (-not $hasRunMutex) {
-  $skipMessage = "[scheduler] Skipped trigger because another ToolUpdateRoom run is still active (mutex=$mutexName)."
-  Write-Host $skipMessage
-  Add-Content -Path $logFile -Value $skipMessage
+  $activeRunInfo = Get-ActiveRunInfo $activeRunInfoPath
+  $activeRunSource = ""
+  if ($null -ne $activeRunInfo -and $null -ne $activeRunInfo.runSource) {
+    $activeRunSource = $activeRunInfo.runSource.ToString().Trim().ToLower()
+  }
+  $isFullScopeManualCommand =
+    ($RunSource -eq "manual") -and
+    (Test-IsFullScopeManualCommand $normalizedEntryScript $ScriptArgs)
+
+  if ($isFullScopeManualCommand -and $activeRunSource -eq "scheduler") {
+    $skipMessage = "[scheduler] Khong chay lenh tay vi luong daily dang chay theo lich da cai. Vui long doi luot daily hien tai hoan thanh de tranh xung dot."
+  } elseif (
+    ($RunSource -eq "manual") -and
+    (-not $isFullScopeManualCommand) -and
+    ($activeRunSource -eq "scheduler")
+  ) {
+    $allowManualScopedRunWithoutMutex = $true
+    Write-Host "[scheduler] Daily dang chay, nhung lenh tay scope nho duoc phep chay song song."
+    Add-Content -Path $logFile -Value "[scheduler] Daily dang chay, cho phep lenh tay scope nho chay song song (khong khoa mutex)."
+  } else {
+    $skipMessage = "[scheduler] Skipped trigger because another ToolUpdateRoom run is still active (mutex=$mutexName)."
+  }
+
+  if (-not $allowManualScopedRunWithoutMutex) {
+    Write-Host $skipMessage
+    Add-Content -Path $logFile -Value $skipMessage
+    if ($runMutex) {
+      $runMutex.Dispose()
+    }
+    return
+  }
+
   if ($runMutex) {
     $runMutex.Dispose()
+    $runMutex = $null
   }
-  return
 }
 
 function Quote-CmdArgument([string]$value) {
@@ -119,6 +233,23 @@ if ($ScriptArgs) {
 }
 
 try {
+  $env:TOOL_RUN_SOURCE = $RunSource
+  $env:TOOL_RUN_CONTEXT = if ($RunSource -eq "scheduler") { "daily" } else { "manual" }
+  $env:RUN_CONTEXT = $env:TOOL_RUN_CONTEXT
+
+  if ($hasRunMutex) {
+    $activeRunInfoPayload = [ordered]@{
+      runSource = $RunSource
+      runContext = $env:TOOL_RUN_CONTEXT
+      entryScript = $EntryScript
+      startedAt = (Get-Date).ToString("o")
+      pid = $PID
+      scriptArgs = $ScriptArgs
+    } | ConvertTo-Json -Depth 4
+    Set-Content -LiteralPath $activeRunInfoPath -Value $activeRunInfoPayload -Encoding UTF8
+    $createdActiveRunInfo = $true
+  }
+
   $nativeCommand = ($commandParts -join " ") + " >> " + (Quote-CmdArgument $logFile) + " 2>&1"
   & cmd.exe /d /c $nativeCommand
   $exitCode = $LASTEXITCODE
@@ -136,6 +267,10 @@ try {
 
   Write-Host "[scheduler] Run completed successfully."
 } finally {
+  if ($createdActiveRunInfo -and (Test-Path -LiteralPath $activeRunInfoPath)) {
+    Remove-Item -LiteralPath $activeRunInfoPath -Force -ErrorAction SilentlyContinue
+  }
+
   if ($hasRunMutex -and $runMutex) {
     try {
       [void]$runMutex.ReleaseMutex()

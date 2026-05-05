@@ -96,6 +96,7 @@ $actionArgs = @(
   "-RepoRoot", (Quote-PowerShellArgument $RepoRoot)
   "-EntryScript", (Quote-PowerShellArgument $EntryScript)
   "-LogPrefix", (Quote-PowerShellArgument $LogPrefix)
+  "-RunSource", (Quote-PowerShellArgument "scheduler")
 ) -join " "
 
 if ($ScriptArgs.Count -gt 0) {

@@ -1979,9 +1979,16 @@ sheet_source_priority: [
     name: "40 nv home",
     if: "caocap",
     web: "40 nv home",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1123439290#gid=1123439290",
+    link: "https://docs.google.com/spreadsheets/d/1j_EYjd5Ecq3K-scOP6I3S6OfGCsdiUu6/edit?gid=1384638604#gid=1384638604",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [1384638604], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?pli=1&gid=1123439290#gid=1123439290",
+        list_address: [1123439290],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2078,9 +2085,16 @@ sheet_source_priority: [
     name: "45",
     if: "caocap",
     web: "45",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1153541068#gid=1153541068",
+    link: "https://docs.google.com/spreadsheets/d/1Hd5_rRdUFSmNLlw80hdDfl2_VzfbfCEtIyB61-A9K48/edit?gid=1283311223#gid=1283311223",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [0], /// có nhiều id khác nhau
+    list_address: [1283311223], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1153541068#gid=1153541068",
+        list_address: [1153541068],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2123,9 +2137,16 @@ sheet_source_priority: [
     name: "48 dd",
     if: "caocap",
     web: "48 dd",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=77508200#gid=77508200",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=2037445747#gid=2037445747",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [77508200], /// có nhiều id khác nhau
+    list_address: [2037445747], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=77508200",
+        list_address: [77508200],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2150,9 +2171,16 @@ sheet_source_priority: [
     name: "48 cg",
     if: "caocap",
     web: "48 cg",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=106711673#gid=106711673",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=1663459166#gid=1663459166",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [106711673], /// có nhiều id khác nhau
+    list_address: [1663459166], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=106711673",
+        list_address: [106711673],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2177,9 +2205,16 @@ sheet_source_priority: [
     name: "48 bd",
     if: "caocap",
     web: "48 bd",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=293878217#gid=293878217",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=1448921752#gid=1448921752",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [293878217], /// có nhiều id khác nhau
+    list_address: [1448921752], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=293878217",
+        list_address: [293878217],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2204,9 +2239,16 @@ sheet_source_priority: [
     name: "48 tx",
     if: "caocap",
     web: "48 tx",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1583965584#gid=1583965584",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=1726646530#gid=1726646530",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [1583965584], /// có nhiều id khác nhau
+    list_address: [1726646530], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1583965584",
+        list_address: [1583965584],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2231,9 +2273,16 @@ sheet_source_priority: [
     name: "48 hbt",
     if: "caocap",
     web: "48 hbt",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=873208498#gid=873208498",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=1841885300#gid=1841885300",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [873208498], /// có nhiều id khác nhau
+    list_address: [1841885300], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=873208498",
+        list_address: [873208498],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2258,9 +2307,16 @@ sheet_source_priority: [
     name: "48 hm",
     if: "caocap",
     web: "48 hm",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=452880823#gid=452880823",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=848525447#gid=848525447",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [452880823], /// có nhiều id khác nhau
+    list_address: [848525447], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=452880823",
+        list_address: [452880823],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2285,9 +2341,16 @@ sheet_source_priority: [
     name: "48 hd",
     if: "caocap",
     web: "48 hd",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=556045727#gid=556045727",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=292490519#gid=292490519",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [556045727], /// có nhiều id khác nhau
+    list_address: [292490519], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=556045727",
+        list_address: [556045727],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2312,9 +2375,16 @@ sheet_source_priority: [
     name: "48 hk",
     if: "caocap",
     web: "48 hk",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=172952590#gid=172952590",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=680945439#gid=680945439",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [172952590], /// có nhiều id khác nhau
+    list_address: [680945439], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=172952590",
+        list_address: [172952590],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2339,9 +2409,16 @@ sheet_source_priority: [
     name: "48 th",
     if: "caocap",
     web: "48 th",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=263710512#gid=263710512",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=1694479032#gid=1694479032",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [263710512], /// có nhiều id khác nhau
+    list_address: [1694479032], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=263710512",
+        list_address: [263710512],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2366,9 +2443,16 @@ sheet_source_priority: [
     name: "48 btl",
     if: "caocap",
     web: "48 btl",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2008534888#gid=2008534888",
+    link: "https://docs.google.com/spreadsheets/d/1eG8j0jwFRJDVMZ5RA73XjJ-jDw5Ma2kzjXlKbgDJbeA/edit?gid=408431881#gid=408431881",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [2008534888], /// có nhiều id khác nhau
+    list_address: [408431881], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=2008534888",
+        list_address: [2008534888],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2384,7 +2468,7 @@ sheet_source_priority: [
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
-    id: 49.1,
+    id: 49,
     type: "chdv",
     address_column: [2],
     room_column: [3],
@@ -2392,10 +2476,17 @@ sheet_source_priority: [
     price_column: [5],
     name: "49 roc huy thuý",
     if: "caocap",
-    web: "49 roc land hiếu",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=172406471#gid=172406471",
+    web: "49 roc huy thúy",
+    link: "https://docs.google.com/spreadsheets/d/1Op_T0IbYnYQbumTt1q68p5PxXydTwwXejiFHru60zk4/edit?gid=494160060#gid=494160060",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [494160060], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=172406471",
+        list_address: [172406471],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2411,7 +2502,7 @@ sheet_source_priority: [
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
-    id: 49.2,
+    id: 49,
     type: "chdv",
     address_column: [2],
     room_column: [3],
@@ -2420,9 +2511,16 @@ sheet_source_priority: [
     name: "49 roc land l,m,h",
     if: "caocap",
     web: "49 roc land l,m,h",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=2037252532#gid=2037252532",
+    link: "https://docs.google.com/spreadsheets/d/1Op_T0IbYnYQbumTt1q68p5PxXydTwwXejiFHru60zk4/edit?gid=0#gid=0",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [0], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=2037252532",
+        list_address: [2037252532],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2438,7 +2536,7 @@ sheet_source_priority: [
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
-    id: 49.3,
+    id: 49,
     type: "chdv",
     address_column: [2],
     room_column: [3],
@@ -2447,9 +2545,16 @@ sheet_source_priority: [
     name: "49 roc land mach ha",
     if: "caocap",
     web: "49 roc land mach ha",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=1579716550#gid=1579716550",
+    link: "https://docs.google.com/spreadsheets/d/1Op_T0IbYnYQbumTt1q68p5PxXydTwwXejiFHru60zk4/edit?gid=1614177642#gid=1614177642",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [1614177642], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1579716550",
+        list_address: [1579716550],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2465,7 +2570,7 @@ sheet_source_priority: [
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
-    id: 49.4,
+    id: 49,
     type: "chdv",
     address_column: [1],
     room_column: [2],
@@ -2474,9 +2579,16 @@ sheet_source_priority: [
     name: "49 roc land mach kien",
     if: "caocap",
     web: "49 roc land mach kien",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=569977053#gid=569977053",
+    link: "https://docs.google.com/spreadsheets/d/1Op_T0IbYnYQbumTt1q68p5PxXydTwwXejiFHru60zk4/edit?gid=1874588226#gid=1874588226",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [1874588226], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=569977053",
+        list_address: [569977053],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2492,18 +2604,25 @@ sheet_source_priority: [
     //  colorExitVerticalText: "#ffff00ff", // màu chữ chuyển bảng hàng dọc thành ngang
   },
   {
-    id: 49.5,
+    id: 49,
     type: "chdv",
     address_column: [2],
     room_column: [3],
     building_code_column: [null],
     price_column: [5],
-    name: "49 roc land Thông",
+    name: "49 thông",
     if: "caocap",
-    web: "49 roc land HT",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit?gid=161078015#gid=161078015",
+    web: "49 thông",
+    link: "https://docs.google.com/spreadsheets/d/1Op_T0IbYnYQbumTt1q68p5PxXydTwwXejiFHru60zk4/edit?gid=848835541#gid=848835541",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [848835541], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=161078015",
+        list_address: [161078015],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2528,9 +2647,16 @@ sheet_source_priority: [
     name: "50 dg home",
     if: "caocap",
     web: "50 dg home",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1330273349",
+    link: "https://docs.google.com/spreadsheets/d/1rXLAzVHYKobXmQVCJTIQt__fpkOd-c2_yMHjDFWrNhw/edit?gid=548044747#gid=548044747",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [548044747], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=1330273349",
+        list_address: [1330273349],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc
@@ -2573,9 +2699,16 @@ sheet_source_priority: [
     name: "52 ",
     if: "caocap",
     web: "52",
-    link: "https://docs.google.com/spreadsheets/d/1JhtBTTPMkrjBnx5aFYmjGco-o-0kvODPUthkKY611ag/edit#gid=206364356",
+    link: "https://docs.google.com/spreadsheets/d/13yfq0fSomgb4W7ZebGt-PnkGPW29rnQ_yjUGVr6Ef2I/edit?gid=0#gid=0",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    list_address: [246641757], /// có nhiều id khác nhau
+    list_address: [0], /// có nhiều id khác nhau
+    sheet_source_priority: [
+      {
+        label: "AI2",
+        link: "",
+        list_address: [261999225],
+      },
+    ],
     //   exitBackgroundColor: [], // màu nền ô muốn lọc
     //   exitTextColor: null, // màu chữ muốn lọc
     //   exitColumnColor: null, // cột màu muốn lọc

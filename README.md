@@ -23,10 +23,23 @@ TELEGRAM_BOT_TOKEN=bot_for_main_updater
 TELEGRAM_CHAT_ID=chat_id_for_main_updater_group
 ROOM_AUDIT_TELEGRAM_BOT_TOKEN=bot_for_assistant_report_group
 ROOM_AUDIT_TELEGRAM_CHAT_ID=chat_id_for_assistant_report_group
+
+# Optional: split daily/manual channel (fallback to base vars if empty)
+TELEGRAM_DAILY_BOT_TOKEN=
+TELEGRAM_DAILY_CHAT_ID=
+TELEGRAM_MANUAL_BOT_TOKEN=
+TELEGRAM_MANUAL_CHAT_ID=
+ROOM_AUDIT_DAILY_TELEGRAM_BOT_TOKEN=
+ROOM_AUDIT_DAILY_TELEGRAM_CHAT_ID=
+ROOM_AUDIT_MANUAL_TELEGRAM_BOT_TOKEN=
+ROOM_AUDIT_MANUAL_TELEGRAM_CHAT_ID=
 ```
 
 - `TELEGRAM_*` is used by the main room update flow (`index.js`) for trong/kin notifications.
 - `ROOM_AUDIT_TELEGRAM_*` is used only by `modules/room-audit`.
+- `*_DAILY_*` receives messages from scheduled daily flow.
+- `*_MANUAL_*` receives messages from manual runs.
+- If `*_DAILY_*`/`*_MANUAL_*` is empty, the tool falls back to `TELEGRAM_*` / `ROOM_AUDIT_TELEGRAM_*`.
 - The app reads both targets from `.env`, so you no longer need to search in multiple files for Telegram credentials.
 - If `ROOM_AUDIT_TELEGRAM_*` is missing, room audit Telegram sending will be skipped instead of reusing the main updater group.
 
@@ -62,6 +75,13 @@ node index.js
 $env:RUN_ONLY_IDS="339,340,341"
 node index.js
 ```
+
+Notes for manual `RUN_ONLY_IDS`:
+
+- The run is treated as `manual` context, so Telegram goes to manual target if configured.
+- The tool now allows rerun even if the same CDT was already marked `TRUE` in `exits.txt` (manual result is prioritized as newest).
+- If another trong-kín run is still active, the new run is skipped to avoid overlap conflicts.
+- If a scheduled daily run is currently in progress, full manual commands (`run:trong-kin`, `run:room-audit` full scope, `run:all`) will be blocked with a daily-conflict message to avoid overlap.
 
 Run from a specific starting ID without editing code:
 
@@ -248,6 +268,17 @@ Run once:
 npm run run:all
 ```
 
+`run:all` from terminal uses `run-context=manual` by default.
+To force daily context for one run:
+
+```powershell
+npm run run:all -- --run-context=daily
+```
+
+Conflict guard with scheduler:
+- If daily task is configured but not running yet (or already finished), manual runs are allowed normally.
+- Manual full-scope commands are blocked only while a scheduled daily run is actively running.
+
 Shortcut command (same behavior, easier to remember):
 
 ```bash
@@ -334,6 +365,12 @@ Run all IDs:
 npm run audit:room
 ```
 
+Run all IDs in manual context explicitly:
+
+```powershell
+npm run audit:room -- --run-context=manual
+```
+
 Run 1 ID:
 
 ```powershell
@@ -381,18 +418,22 @@ npm run audit:room -- --rule1-hours=12
 ### Supported flags for manual room-audit run
 
 - `--ids=339,340,341`: run only the specified CDT IDs. If omitted, the tool runs all IDs.
+- `--run-context=manual|daily`: choose Telegram channel + default sheet behavior (`manual` is default for direct/manual run).
 - `--debug=true|false`: show debug logs.
 - `--use-api=true|false`: enable or disable API enrichment.
 - `--limit=10`: stop after a specific number of audit rows.
 - `--rule1-hours=24`: change the stale threshold for Rule 1.
-- `--test-errors=1,2,3...13`: chỉ chạy test các nhóm lỗi được chọn (1=II.A.1, 2=II.A.2, 3=II.A.3, 4=II.A.4, 5=II.B.1, ..., 13=II.B.9).
+- `--test-errors=1,2,3...14`: chỉ chạy test các nhóm lỗi được chọn (1=II.A.1, 2=II.A.2, 3=II.A.3, 4=II.A.4, 5=II.B.1, ..., 13=II.B.9, 14=II.B.10).
 - `--send-telegram=true|false`: gửi hoặc tắt gửi Telegram room-audit.
 - `--sync-report-sheet=true|false`: ghi hoặc tắt ghi Google Sheet báo cáo room-audit.
+- Nếu không truyền `--sync-report-sheet`:
+  - `run-context=daily`: mặc định ghi sheet.
+  - `run-context=manual`: chỉ tự ghi sheet khi chạy full scope (tất cả ID, tất cả lỗi, không `--limit`); nếu chạy lọc ID/lỗi/limit thì mặc định không ghi.
 - `--report-sheet-spreadsheet-id=...`: override spreadsheet báo cáo (mặc định của chú).
 - `--report-sheet-gid=297377874`: override sheet gid báo cáo.
 - `--report-sheet-header-row=1`: hàng chứa ngày.
 - `--report-sheet-first-data-row=2`: hàng bắt đầu ghi dữ liệu.
-- `--report-sheet-last-data-row=15`: hàng kết thúc ghi dữ liệu.
+- `--report-sheet-last-data-row=16`: hàng kết thúc ghi dữ liệu.
 - `--report-sheet-start-column=7`: cột ngày đầu tiên (7 = G).
 - `--report-sheet-day-window-size=10`: chỉ dùng tối đa 10 cột ngày; đầy vòng sẽ quay về cột bắt đầu để ghi đè.
 - `--openclaw-workspace-dir="C:/path/to/workspace"`: override the OpenClaw copy target for this run only.
@@ -409,7 +450,7 @@ Google Sheet daily report rule:
 - Sheet target mặc định: `11EyNOVAMn7ei-J8svcMjpvv1B7AashTUDyRB-gUeHho` (gid `297377874`)
 - Mỗi ngày dùng 1 cột, bắt đầu từ cột `G`
 - Chỉ dùng tối đa 10 cột ngày (`G -> P`), khi đầy vòng sẽ quay lại `G` để ghi đè báo cáo mới
-- Nếu chạy lại trong cùng ngày: xóa nội dung cột ngày hiện tại (`row 2..15`) rồi ghi lại dữ liệu mới
+- Nếu chạy lại trong cùng ngày: xóa nội dung cột ngày hiện tại (`row 2..16`) rồi ghi lại dữ liệu mới
 - Nếu sang ngày mới: ghi sang cột kế bên phải
 
 Telegram report rule:

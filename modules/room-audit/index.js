@@ -46,7 +46,42 @@ function parseErrorCodeList(value) {
     .toString()
     .split(",")
     .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 13);
+    .filter((item) => Number.isFinite(item) && item >= 1 && item <= 14);
+}
+
+function normalizeRunContext(value = "") {
+  const context = value.toString().trim().toLowerCase();
+  if (context === "manual") {
+    return "manual";
+  }
+  return "daily";
+}
+
+function isFullAuditScope(options = {}) {
+  const hasOnlyIds =
+    Array.isArray(options.onlyIds) && options.onlyIds.length > 0;
+  const hasTestErrors =
+    Array.isArray(options.testErrors) && options.testErrors.length > 0;
+  const hasLimit =
+    options.limit !== null &&
+    options.limit !== undefined &&
+    Number.isFinite(Number(options.limit));
+
+  return !hasOnlyIds && !hasTestErrors && !hasLimit;
+}
+
+function normalizeSourceLabel(value = "") {
+  return value.toString().trim().toUpperCase();
+}
+
+function hasAi0MissingAddressSourceError(sourceErrors = []) {
+  if (!Array.isArray(sourceErrors) || sourceErrors.length === 0) {
+    return false;
+  }
+
+  return sourceErrors.some((entry) =>
+    /AI0\s*:\s*khong tim duoc cot dia chi/i.test((entry || "").toString()),
+  );
 }
 
 function parseArgs(argv = []) {
@@ -635,18 +670,37 @@ function buildRunOptions(argv = [], env = process.env) {
       env.ROOM_AUDIT_TEST_ERRORS ??
       env.npm_config_test_errors,
   );
+  const parsedLimit = parseNumber(
+    args.limit ?? env.ROOM_AUDIT_LIMIT ?? env.npm_config_limit,
+    null,
+  );
+  const explicitRunContext =
+    args["run-context"] ??
+    env.ROOM_AUDIT_RUN_CONTEXT ??
+    env.TOOL_RUN_CONTEXT ??
+    env.RUN_CONTEXT;
+  const runContext = normalizeRunContext(explicitRunContext || "manual");
+  const syncReportSheetInput =
+    args["sync-report-sheet"] ??
+    env.ROOM_AUDIT_SYNC_REPORT_SHEET ??
+    env.npm_config_sync_report_sheet;
+  const syncReportSheetDefault =
+    runContext === "daily" ||
+    isFullAuditScope({
+      onlyIds,
+      testErrors,
+      limit: parsedLimit,
+    });
 
   return {
     useApi: toBoolean(
       args["use-api"] ?? env.ROOM_AUDIT_USE_API ?? env.npm_config_use_api,
       true,
     ),
-    limit: parseNumber(
-      args.limit ?? env.ROOM_AUDIT_LIMIT ?? env.npm_config_limit,
-      null,
-    ),
+    limit: parsedLimit,
     onlyIds,
     testErrors,
+    runContext,
     rule1ThresholdHours: parseNumber(
       args["rule1-hours"] ??
         env.ROOM_AUDIT_RULE1_HOURS ??
@@ -664,10 +718,8 @@ function buildRunOptions(argv = [], env = process.env) {
       true,
     ),
     syncReportSheet: toBoolean(
-      args["sync-report-sheet"] ??
-        env.ROOM_AUDIT_SYNC_REPORT_SHEET ??
-        env.npm_config_sync_report_sheet,
-      true,
+      syncReportSheetInput,
+      syncReportSheetDefault,
     ),
     reportSheetSpreadsheetId:
       args["report-sheet-spreadsheet-id"] ??
@@ -695,7 +747,7 @@ function buildRunOptions(argv = [], env = process.env) {
       args["report-sheet-last-data-row"] ??
         env.ROOM_AUDIT_REPORT_SHEET_LAST_DATA_ROW ??
         env.npm_config_report_sheet_last_data_row,
-      14,
+      16,
     ),
     reportSheetStartColumn: parseNumber(
       args["report-sheet-start-column"] ??
@@ -717,6 +769,15 @@ function buildRunOptions(argv = [], env = process.env) {
 }
 
 async function runAuditFlow(options = {}) {
+  const normalizedRunContext = normalizeRunContext(options.runContext || "manual");
+  const normalizedOptions = {
+    ...options,
+    runContext: normalizedRunContext,
+    syncReportSheet:
+      options?.syncReportSheet === undefined || options?.syncReportSheet === null
+        ? normalizedRunContext === "daily" || isFullAuditScope(options)
+        : options.syncReportSheet,
+  };
   const rootDir = path.resolve(__dirname, "../..");
   const outputDir = path.join(rootDir, "reports", "room-audit");
   const updater = new UpdateRoomSari();
@@ -725,34 +786,45 @@ async function runAuditFlow(options = {}) {
   const rows = [];
   const roomCache = new Map();
   const configs = updater.LIST_GGSHEET.filter((config) => {
-    if (!Array.isArray(options.onlyIds) || options.onlyIds.length === 0) {
+    if (
+      !Array.isArray(normalizedOptions.onlyIds) ||
+      normalizedOptions.onlyIds.length === 0
+    ) {
       return true;
     }
 
-    return options.onlyIds.includes(Number(config.id));
+    return normalizedOptions.onlyIds.includes(Number(config.id));
   });
 
-  debugLog(options.debug, "parsed-options", options);
-  debugLog(options.debug, "config-count-after-filter", configs.length);
+  debugLog(normalizedOptions.debug, "parsed-options", normalizedOptions);
   debugLog(
-    options.debug,
+    normalizedOptions.debug,
+    "config-count-after-filter",
+    configs.length,
+  );
+  debugLog(
+    normalizedOptions.debug,
     "config-ids-after-filter",
     configs.map((config) => config.id),
   );
 
   await ensureDirectory(outputDir);
-  await sendRoomAuditTelegramStatus("Bắt đầu cập nhật room-audit...", options);
+  await sendRoomAuditTelegramStatus(
+    "Bắt đầu cập nhật room-audit...",
+    normalizedOptions,
+  );
 
   try {
     const isFullRunScope =
-      (!Array.isArray(options.onlyIds) || options.onlyIds.length === 0) &&
-      !Number.isFinite(options.limit);
+      (!Array.isArray(normalizedOptions.onlyIds) ||
+        normalizedOptions.onlyIds.length === 0) &&
+      !Number.isFinite(normalizedOptions.limit);
     let webVacantRoomSnapshot = {
       total: null,
       error: null,
       source: "sheet_fallback",
     };
-    if (options.useApi && isFullRunScope) {
+    if (normalizedOptions.useApi && isFullRunScope) {
       const snapshot = await fetchWebVacantRoomTotal(updater);
       webVacantRoomSnapshot = {
         total: snapshot.total,
@@ -784,6 +856,8 @@ async function runAuditFlow(options = {}) {
           empty_sheet_count: 0,
           row_count: 0,
           source_error_count: 0,
+          ran_root_link: false,
+          ran_target_link_due_missing_root_address: false,
         });
       }
 
@@ -796,7 +870,7 @@ async function runAuditFlow(options = {}) {
       const configSourceErrors = [];
       let buildingList = [];
 
-      if (options.useApi) {
+      if (normalizedOptions.useApi) {
         try {
           const searchRealnews = await updater.searchRealnewByInvestor(config.id);
           buildingList = searchRealnews?.content || [];
@@ -858,6 +932,23 @@ async function runAuditFlow(options = {}) {
               executionContext.source_error_count += 1;
             }
           }
+
+          const attemptedRootSource = Boolean(processResult?.attemptedRootSource);
+          if (attemptedRootSource) {
+            executionContext.ran_root_link = true;
+          }
+
+          const selectedSourceLabel = normalizeSourceLabel(
+            processResult?.selectedSourceLabel || processResult?.source?.label || "",
+          );
+          if (selectedSourceLabel === "AI0") {
+            executionContext.ran_root_link = true;
+          } else if (
+            selectedSourceLabel &&
+            hasAi0MissingAddressSourceError(processResult?.sourceErrors)
+          ) {
+            executionContext.ran_target_link_due_missing_root_address = true;
+          }
         } else {
           processedRows = [];
         }
@@ -869,7 +960,7 @@ async function runAuditFlow(options = {}) {
         }
 
         debugLog(
-          options.debug,
+          normalizedOptions.debug,
           `rows-from-sheet cdt=${config.id} gid=${sheetGid}`,
           processedRows.length,
         );
@@ -881,7 +972,7 @@ async function runAuditFlow(options = {}) {
           let matchContext = {};
           let apiErrors = {};
 
-          if (options.useApi) {
+          if (normalizedOptions.useApi) {
             const apiResult = await enrichWithApi(
               updater,
               config,
@@ -917,18 +1008,31 @@ async function runAuditFlow(options = {}) {
 
           rows.push(normalizedRow);
           configRows.push(normalizedRow);
-          if (Number.isFinite(options.limit) && rows.length >= options.limit) {
-            debugLog(options.debug, "limit-hit-final-row-count", rows.length);
+          if (
+            Number.isFinite(normalizedOptions.limit) &&
+            rows.length >= normalizedOptions.limit
+          ) {
+            debugLog(
+              normalizedOptions.debug,
+              "limit-hit-final-row-count",
+              rows.length,
+            );
             break;
           }
         }
 
-        if (Number.isFinite(options.limit) && rows.length >= options.limit) {
+        if (
+          Number.isFinite(normalizedOptions.limit) &&
+          rows.length >= normalizedOptions.limit
+        ) {
           break;
         }
       }
 
-      if (Number.isFinite(options.limit) && rows.length >= options.limit) {
+      if (
+        Number.isFinite(normalizedOptions.limit) &&
+        rows.length >= normalizedOptions.limit
+      ) {
         break;
       }
 
@@ -939,21 +1043,21 @@ async function runAuditFlow(options = {}) {
       sourceErrors,
       executionContext: [...executionContextByCdt.values()],
       options: {
-        ...options,
+        ...normalizedOptions,
         webVacantRoomTotal: webVacantRoomSnapshot.total,
         webVacantRoomTotalSource: webVacantRoomSnapshot.source,
         webVacantRoomTotalError: webVacantRoomSnapshot.error,
       },
     });
 
-    if (options.debug) {
+    if (normalizedOptions.debug) {
       const rowsByCdt = rows.reduce((accumulator, row) => {
         const key = String(row.cdt_id);
         accumulator[key] = (accumulator[key] || 0) + 1;
         return accumulator;
       }, {});
-      debugLog(options.debug, "final-rows-after-limit", rows.length);
-      debugLog(options.debug, "final-rows-by-cdt", rowsByCdt);
+      debugLog(normalizedOptions.debug, "final-rows-after-limit", rows.length);
+      debugLog(normalizedOptions.debug, "final-rows-by-cdt", rowsByCdt);
     }
 
     const timestamp = formatLocalDateTime(new Date()).replace(/[: ]/g, "-");
@@ -979,16 +1083,16 @@ async function runAuditFlow(options = {}) {
     });
     const openClawSummaryCopy = await copyLatestSummaryToOpenClaw(
       latestSummaryPath,
-      options.openClawWorkspaceDir,
+      normalizedOptions.openClawWorkspaceDir,
     );
-    const deliveryResult = await deliverRoomAuditReport(report, options);
+    const deliveryResult = await deliverRoomAuditReport(report, normalizedOptions);
     const sheetSyncFailed = deliveryResult?.sheetResult?.reason === "SHEET_SYNC_FAILED";
     const completionMessage = sheetSyncFailed
       ? `Hoàn thành cập nhật room-audit (cảnh báo: sync sheet lỗi - ${
           deliveryResult?.sheetResult?.error || "unknown error"
         })`
       : "Hoàn thành cập nhật room-audit.";
-    await sendRoomAuditTelegramStatus(completionMessage, options);
+    await sendRoomAuditTelegramStatus(completionMessage, normalizedOptions);
 
     return {
       report,
@@ -1008,7 +1112,7 @@ async function runAuditFlow(options = {}) {
   } catch (error) {
     await sendRoomAuditTelegramStatus(
       `Cập nhật room-audit thất bại: ${error?.message || error}`,
-      options,
+      normalizedOptions,
     );
     throw error;
   }
