@@ -1185,7 +1185,6 @@
     room_column: [6],
     building_code_column: [null],
     price_column: [7],
-    price_fallback_columns: [8], // cột giá phụ nếu cột giá chính trống
     name: " 21 ren house",
     if: "caocap",
     web: " 21 ren house",
@@ -1204,8 +1203,6 @@
     //   exitColumnColor: null, // cột màu muốn lọc
     exit: ["Đã chốt", "Biko"], // bỏ qua phòng không còn trống
     exitColumn: 10, // cột trạng thái để loại trừ trống kín
-    ignore_hidden_rows: true, // bỏ qua các hàng đang ẩn trên sheet
-    ignore_hidden_columns: true, // bỏ qua các cột đang ẩn trên sheet
     exitLinkDriver: 3, // trường này là trường link driver để tải ảnh về
     column: [1, 6, null, 7], // địa chỉ , phòng ,mã tòa ở bảng hàng, giá
     // metadata: {before: 0, split: '(' }, // phục vụ cho 2 trường chung 1 ô. cụ thể 108 là địa chỉ + tên phòng chung 1 ô. thi before là vị trí địa chỉ đứng trước cửa colum (2 = 0, 2 = 1, null =2, 5 = 3), split là kỹ tự ngăn cách giữa các trường

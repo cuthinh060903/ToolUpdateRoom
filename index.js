@@ -3532,59 +3532,24 @@ class UpdateRoomSari {
       const sheetTitle = sheet.properties.title;
       console.log(`📄 Sheet tìm thấy: ${sheetTitle} (gid: ${targetGid})`);
 
-      // 📌 Lấy dữ liệu ô + metadata ẩn hàng/cột của từng ô trong sheet
+      // 📌 Lấy thông tin màu nền của từng ô trong sheet
       const response = await sheets.spreadsheets.get({
         spreadsheetId,
-        ranges: [`${sheetTitle}`],
+        ranges: [`${sheetTitle}`], // Lấy màu từ A1 đến Z100
         includeGridData: true,
-        fields:
-          "sheets(data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue,effectiveFormat.backgroundColor,effectiveFormat.textFormat.foregroundColor,userEnteredFormat.textFormat.link,textFormatRuns,chipRuns,hyperlink,note)),rowMetadata(hiddenByUser),columnMetadata(hiddenByUser)),properties(sheetId,title))",
+        // fields: "sheets.data.rowData.values.effectiveFormat.backgroundColor"
       });
-      const gridData = response?.data?.sheets?.[0]?.data?.[0] || {};
-      const rowData = Array.isArray(gridData?.rowData) ? gridData.rowData : [];
-      const rowMetadata = Array.isArray(gridData?.rowMetadata)
-        ? gridData.rowMetadata
-        : [];
-      const columnMetadata = Array.isArray(gridData?.columnMetadata)
-        ? gridData.columnMetadata
-        : [];
-      const startRow = Number(gridData?.startRow || 0);
-      const startColumn = Number(gridData?.startColumn || 0);
-
-      if (rowData.length > 0) {
-        const hiddenRows = new Set();
-        if (options?.ignoreHiddenRows) {
-          rowMetadata.forEach((meta, idx) => {
-            if (meta?.hiddenByUser) {
-              hiddenRows.add(startRow + idx);
-            }
-          });
-        }
-
-        const hiddenColumns = new Set();
-        if (options?.ignoreHiddenColumns) {
-          columnMetadata.forEach((meta, idx) => {
-            if (meta?.hiddenByUser) {
-              hiddenColumns.add(startColumn + idx);
-            }
-          });
-        }
-
-        const jsonRows = [];
-        rowData.forEach((row, rowOffset) => {
-          const absoluteRowIndex = startRow + rowOffset;
-          if (hiddenRows.has(absoluteRowIndex)) {
-            return;
-          }
-
+      const getRows = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: sheetTitle,
+      });
+      const rows = getRows.data.values;
+      const data = response.data.sheets[0].data[0].rowData;
+      if (data && data.length && rows?.length) {
+        const jsonRows = rows.map((row, rowIndex) => {
           const obj = {};
-          const cells = Array.isArray(row?.values) ? row.values : [];
-          cells.forEach((cell, colOffset) => {
-            const absoluteColIndex = startColumn + colOffset;
-            if (hiddenColumns.has(absoluteColIndex)) {
-              return;
-            }
-
+          row.forEach(async (value, colIndex) => {
+            const cell = data[rowIndex]?.values[colIndex];
             const backgroundColor = cell?.effectiveFormat?.backgroundColor;
             const textColor =
               cell?.effectiveFormat?.textFormat?.foregroundColor;
@@ -3605,20 +3570,12 @@ class UpdateRoomSari {
                 )
               : null;
 
-            const cellEffectiveValue = cell?.effectiveValue || {};
-            const value =
-              cell?.formattedValue ??
-              cellEffectiveValue?.stringValue ??
-              cellEffectiveValue?.numberValue ??
-              cellEffectiveValue?.boolValue ??
-              "";
             const hyperlink = this.extractHyperlinkFromCell(cell);
             const formulaValue =
               cell?.userEnteredValue?.formulaValue ||
               cell?.userEnteredValue?.formula ||
               "";
-
-            obj[`field${absoluteColIndex}`] = {
+            obj[`field${colIndex}`] = {
               value,
               formula: formulaValue,
               bgColor: backgroundColorHex,
@@ -3627,10 +3584,7 @@ class UpdateRoomSari {
               note: cell?.note || "",
             };
           });
-
-          if (Object.keys(obj).length > 0) {
-            jsonRows.push(obj);
-          }
+          return obj;
         });
 
         return jsonRows;
@@ -3978,8 +3932,6 @@ class UpdateRoomSari {
             try {
               sheetData = await this.spreadsheets(spreadsheetId, gid, {
                 silentErrors: true,
-                ignoreHiddenRows: Boolean(huydev?.ignore_hidden_rows),
-                ignoreHiddenColumns: Boolean(huydev?.ignore_hidden_columns),
               });
             } catch (error) {
               const configuredLinkInfo = await this.extractGoogleSheetInfo(
@@ -4003,8 +3955,6 @@ class UpdateRoomSari {
               );
               sheetData = await this.spreadsheets(spreadsheetId, fallbackGid, {
                 silentErrors: true,
-                ignoreHiddenRows: Boolean(huydev?.ignore_hidden_rows),
-                ignoreHiddenColumns: Boolean(huydev?.ignore_hidden_columns),
               });
             }
           } else if (huydev.if == "binhthuong") {
