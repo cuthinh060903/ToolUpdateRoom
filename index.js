@@ -22,6 +22,8 @@ const DAILY_ROTATION_LOG_FILES = new Set([
 ]);
 const DEFAULT_LOG_RETENTION_DAYS = 3;
 const DEFAULT_API_TIMEOUT_MS = 30000;
+const MAIN_RUN_LOCK_DIR = path.join("logs", ".locks");
+const MAIN_RUN_LOCK_FILE = path.join(MAIN_RUN_LOCK_DIR, "main-updater.lock");
 
 function toBooleanEnv(value, defaultValue = false) {
   if (value === undefined || value === null || value === "") {
@@ -31,6 +33,14 @@ function toBooleanEnv(value, defaultValue = false) {
   return ["1", "true", "yes", "y", "on"].includes(
     value.toString().trim().toLowerCase(),
   );
+}
+
+function normalizeRunContext(value = "") {
+  const context = value.toString().trim().toLowerCase();
+  if (context === "manual") {
+    return "manual";
+  }
+  return "daily";
 }
 
 class UpdateRoomSari {
@@ -66,6 +76,10 @@ class UpdateRoomSari {
       .filter((id) => id !== "")
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id));
+    const configuredRunContext =
+      process.env.TOOL_RUN_CONTEXT || process.env.RUN_CONTEXT || "";
+    this.RUN_CONTEXT = normalizeRunContext(configuredRunContext || "manual");
+    this.mainRunLockPath = path.resolve(process.cwd(), MAIN_RUN_LOCK_FILE);
     this.API_KEY_GGSHEET = "4f74e1628d70cc3b23f7ad9d1d0a50802d01d1ea";
     this.BUCKETNAME = "sari";
     this.MINIO_ACCESS_KEY = (process.env.MINIO_ACCESS_KEY || "").trim();
@@ -109,6 +123,62 @@ class UpdateRoomSari {
       accessKey: this.MINIO_ACCESS_KEY,
       secretKey: this.MINIO_SECRET_KEY,
     });
+  }
+
+  getMainTelegramTargetKey() {
+    return this.RUN_CONTEXT === "manual"
+      ? "mainUpdaterManual"
+      : "mainUpdaterDaily";
+  }
+
+  async sendMainTelegramMessage(message, options = {}) {
+    return sendTelegramMessage(message, {
+      targetKey: this.getMainTelegramTargetKey(),
+      ...options,
+    });
+  }
+
+  async acquireMainRunLock() {
+    const lockPath = this.mainRunLockPath;
+    const lockDir = path.dirname(lockPath);
+    await fs.mkdir(lockDir, { recursive: true });
+
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      await handle.writeFile(
+        JSON.stringify(
+          {
+            pid: process.pid,
+            run_context: this.RUN_CONTEXT,
+            started_at: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      await handle.close();
+      return true;
+    } catch (error) {
+      if (error?.code === "EEXIST") {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async releaseMainRunLock() {
+    try {
+      await fs.unlink(this.mainRunLockPath);
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        console.warn(
+          `[run-lock] Failed to release ${this.mainRunLockPath}: ${
+            error?.message || error
+          }`,
+        );
+      }
+    }
   }
 
   ensureMinioCredentials() {
@@ -3581,6 +3651,70 @@ class UpdateRoomSari {
     };
   }
 
+  hasUsableAddressDataInSheetRows(rows = [], config = {}) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return false;
+    }
+
+    const hasVerticalAddressField =
+      !this.isEmpty(config?.columnVertical) &&
+      !this.isEmpty(config?.colorExitVerticalBg);
+    const addressColumns = Array.isArray(config?.address_column)
+      ? config.address_column
+      : [];
+    const primaryAddressColumn = addressColumns.find(
+      (column) => column !== null && column !== undefined,
+    );
+
+    for (const row of rows) {
+      if (!row || typeof row !== "object") {
+        continue;
+      }
+
+      const composedAddress = this.composeAddressFromColumns(row, addressColumns);
+      if (
+        composedAddress &&
+        this.isLikelyAddressAnchorText(composedAddress) &&
+        !this.isLikelySheetNoteAddress(composedAddress)
+      ) {
+        return true;
+      }
+
+      if (primaryAddressColumn !== undefined) {
+        const primaryAddress = this.normalizeSheetCellText(
+          row?.[`field${primaryAddressColumn}`]?.value,
+        );
+        if (
+          primaryAddress &&
+          this.isLikelyAddressAnchorText(primaryAddress) &&
+          !this.isLikelySheetNoteAddress(primaryAddress)
+        ) {
+          return true;
+        }
+      }
+
+      if (hasVerticalAddressField) {
+        const vCol = Number(config.columnVertical);
+        const verticalAddress = this.normalizeSheetCellText(
+          row?.[`field${vCol}`]?.value,
+        );
+        const bannerAddress = this.findAddressBannerTextInRow(row, vCol, 4);
+        const normalizedAddress = this.stripAddressBannerPrefix(
+          bannerAddress || verticalAddress,
+        );
+        if (
+          normalizedAddress &&
+          this.isLikelyAddressAnchorText(normalizedAddress) &&
+          !this.isLikelySheetNoteAddress(normalizedAddress)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   async processCsvData(huydev, idSheetUrl = null, sheetIndex = 0) {
     try {
       let sheetData;
@@ -3661,6 +3795,15 @@ class UpdateRoomSari {
             throw new Error(`Loại nguồn không hỗ trợ: ${huydev.if}`);
           }
 
+          // Rule fallback: luôn thử AI0 trước; chỉ chạy link đích khi AI0
+          // không xác định được dữ liệu cột địa chỉ.
+          if (
+            huydev.if == "caocap" &&
+            !this.hasUsableAddressDataInSheetRows(sheetData, huydev)
+          ) {
+            throw new Error("khong tim duoc cot dia chi");
+          }
+
           selectedSource = {
             label: sourceLabel,
             link: sourceCandidate.link,
@@ -3698,6 +3841,11 @@ class UpdateRoomSari {
           rows: [],
           source: selectedSource,
           sourceErrors,
+          attemptedRootSource: sourceCandidates.some(
+            (source) =>
+              (source?.label || "").toString().trim().toUpperCase() === "AI0",
+          ),
+          selectedSourceLabel: selectedSource?.label || "",
         };
       }
       let results = sheetData;
@@ -4128,6 +4276,11 @@ class UpdateRoomSari {
         rows: datas,
         source: selectedSource,
         sourceErrors,
+        attemptedRootSource: sourceCandidates.some(
+          (source) =>
+            (source?.label || "").toString().trim().toUpperCase() === "AI0",
+        ),
+        selectedSourceLabel: selectedSource?.label || "",
       };
     } catch (error) {
       console.error(`Có lỗi xảy ra: ${error}`);
@@ -4154,15 +4307,28 @@ class UpdateRoomSari {
   }
 
   async run() {
+    let hasRunLock = false;
     try {
+      hasRunLock = await this.acquireMainRunLock();
+      if (!hasRunLock) {
+        const lockMessage =
+          "[run-lock] Bỏ qua lượt chạy vì tool trống kín đang chạy ở phiên khác.";
+        console.warn(lockMessage);
+        await this.sendMainTelegramMessage(lockMessage);
+        return;
+      }
+
       this.runStats = {};
       let totalTrong = 0;
       let totalTaoMoi = 0;
       let cdtStats = {};
       const countedTotalDongKeys = new Set();
+      const allowManualRerun = this.RUN_CONTEXT === "manual";
 
       await fs.writeFile("thong_ke.txt", "");
-      await sendTelegramMessage("Bắt đầu cập nhật...");
+      await this.sendMainTelegramMessage(
+        `Bắt đầu cập nhật... [${this.RUN_CONTEXT.toUpperCase()}]`,
+      );
       if (this.RUN_ONLY_IDS.length > 0) {
         console.log(
           `[config] Chạy giới hạn cho ID: ${this.RUN_ONLY_IDS.join(", ")}`,
@@ -4223,7 +4389,12 @@ class UpdateRoomSari {
           "exits.txt",
           entryExitsRun,
         );
-        if (!exitRunMismatch) {
+        if (!exitRunMismatch || allowManualRerun) {
+          if (exitRunMismatch && allowManualRerun) {
+            console.log(
+              `[manual-rerun] Bỏ qua chặn exits.txt cho ${executionKey} để ưu tiên kết quả chạy tay mới nhất.`,
+            );
+          }
           // run
           try {
             const sheetAddressList = Array.isArray(huydev.list_address)
@@ -4782,7 +4953,7 @@ class UpdateRoomSari {
             if (missingAddresses.size > 0) {
               const missingList = Array.from(missingAddresses).join("\n+ ");
               const summaryMsg = `❌ DANH SÁCH ĐỊA CHỈ THIẾU (${executionKey}):\n+ ${missingList}`;
-              await sendTelegramMessage(summaryMsg);
+              await this.sendMainTelegramMessage(summaryMsg);
             }
             const formattedDate = this.getFormattedDate();
             await this.appendToFile(
@@ -4836,24 +5007,42 @@ class UpdateRoomSari {
             let finalMessageText =
               chunk.join("\n") +
               `\nTổng Trống: ${totalTrong} | Tổng Tạo mới: ${totalTaoMoi} | ${this.getFormattedDate()}`;
-            await sendTelegramMessage(finalMessageText);
+            await this.sendMainTelegramMessage(finalMessageText);
           } else {
             let finalMessageText = chunk.join("\n");
-            await sendTelegramMessage(finalMessageText);
+            await this.sendMainTelegramMessage(finalMessageText);
           }
           await this.sleep(1000); // Tránh rate limit telegram khi gửi nhiều
         }
       } else if (totalTrong > 0 || totalTaoMoi > 0) {
         const finalMessage = `Trống: ${totalTrong} | Tạo mới: ${totalTaoMoi} | ${this.getFormattedDate()}`;
-        await sendTelegramMessage(finalMessage);
+        await this.sendMainTelegramMessage(finalMessage);
       } else {
         const finalMessage = `Không có cập nhật mới | ${this.getFormattedDate()}`;
-        await sendTelegramMessage(finalMessage);
+        await this.sendMainTelegramMessage(finalMessage);
       }
 
-      await sendTelegramMessage("Hoàn thành");
+      await this.sendMainTelegramMessage(
+        `Hoàn thành [${this.RUN_CONTEXT.toUpperCase()}]`,
+      );
     } catch (error) {
       console.log("Lỗi ngoài cùng", error);
+      try {
+        await this.sendMainTelegramMessage(
+          `Cập nhật thất bại [${this.RUN_CONTEXT.toUpperCase()}]: ${
+            error?.message || error
+          }`,
+        );
+      } catch (telegramError) {
+        console.error(
+          "[telegram] Không gửi được thông báo thất bại:",
+          telegramError?.message || telegramError,
+        );
+      }
+    } finally {
+      if (hasRunLock) {
+        await this.releaseMainRunLock();
+      }
     }
   }
 

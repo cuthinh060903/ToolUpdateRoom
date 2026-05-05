@@ -434,6 +434,8 @@ function buildExecutionSummaryByCdt(executionContext = [], sourceErrors = []) {
         empty_sheet_count: 0,
         row_count: 0,
         source_error_count: 0,
+        ran_root_link: false,
+        ran_target_link_due_missing_root_address: false,
       });
     }
 
@@ -447,6 +449,10 @@ function buildExecutionSummaryByCdt(executionContext = [], sourceErrors = []) {
     group.empty_sheet_count += Number(item?.empty_sheet_count || 0);
     group.row_count += Number(item?.row_count || 0);
     group.source_error_count += Number(item?.source_error_count || 0);
+    group.ran_root_link = group.ran_root_link || Boolean(item?.ran_root_link);
+    group.ran_target_link_due_missing_root_address =
+      group.ran_target_link_due_missing_root_address ||
+      Boolean(item?.ran_target_link_due_missing_root_address);
   });
 
   sourceErrors.forEach((sourceError) => {
@@ -2508,7 +2514,9 @@ function buildReport({
     Array.isArray(options?.testErrors) ? options.testErrors : [],
   );
   const hasSelectedErrors = selectedErrorCodes.size > 0;
-  const shouldRunRule2 = !hasSelectedErrors || [3, 4, 5, 6, 7, 9].some((code) => selectedErrorCodes.has(code));
+  const shouldRunRule2 =
+    !hasSelectedErrors ||
+    [3, 4, 5, 6, 7, 9, 13].some((code) => selectedErrorCodes.has(code));
   const shouldRunRule4 = !hasSelectedErrors || selectedErrorCodes.has(8);
 
   const thresholdHours = Number.isFinite(options?.rule1ThresholdHours)

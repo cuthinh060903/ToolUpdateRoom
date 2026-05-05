@@ -4,13 +4,45 @@ require("dotenv").config({ quiet: true });
 const TELEGRAM_TARGETS = Object.freeze({
   mainUpdater: {
     label: "Telegram updater",
-    botTokenEnv: "TELEGRAM_BOT_TOKEN",
-    chatIdEnv: "TELEGRAM_CHAT_ID",
+    botTokenEnvs: ["TELEGRAM_BOT_TOKEN"],
+    chatIdEnvs: ["TELEGRAM_CHAT_ID"],
+  },
+  mainUpdaterDaily: {
+    label: "Telegram updater (daily)",
+    botTokenEnvs: ["TELEGRAM_DAILY_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"],
+    chatIdEnvs: ["TELEGRAM_DAILY_CHAT_ID", "TELEGRAM_CHAT_ID"],
+  },
+  mainUpdaterManual: {
+    label: "Telegram updater (manual)",
+    botTokenEnvs: ["TELEGRAM_MANUAL_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"],
+    chatIdEnvs: ["TELEGRAM_MANUAL_CHAT_ID", "TELEGRAM_CHAT_ID"],
   },
   roomAudit: {
     label: "room audit Telegram",
-    botTokenEnv: "ROOM_AUDIT_TELEGRAM_BOT_TOKEN",
-    chatIdEnv: "ROOM_AUDIT_TELEGRAM_CHAT_ID",
+    botTokenEnvs: ["ROOM_AUDIT_TELEGRAM_BOT_TOKEN"],
+    chatIdEnvs: ["ROOM_AUDIT_TELEGRAM_CHAT_ID"],
+  },
+  roomAuditDaily: {
+    label: "room audit Telegram (daily)",
+    botTokenEnvs: [
+      "ROOM_AUDIT_DAILY_TELEGRAM_BOT_TOKEN",
+      "ROOM_AUDIT_TELEGRAM_BOT_TOKEN",
+    ],
+    chatIdEnvs: [
+      "ROOM_AUDIT_DAILY_TELEGRAM_CHAT_ID",
+      "ROOM_AUDIT_TELEGRAM_CHAT_ID",
+    ],
+  },
+  roomAuditManual: {
+    label: "room audit Telegram (manual)",
+    botTokenEnvs: [
+      "ROOM_AUDIT_MANUAL_TELEGRAM_BOT_TOKEN",
+      "ROOM_AUDIT_TELEGRAM_BOT_TOKEN",
+    ],
+    chatIdEnvs: [
+      "ROOM_AUDIT_MANUAL_TELEGRAM_CHAT_ID",
+      "ROOM_AUDIT_TELEGRAM_CHAT_ID",
+    ],
   },
 });
 
@@ -24,14 +56,30 @@ function normalizeConfigValue(value) {
 
 function getTelegramTarget(targetKey = "mainUpdater") {
   const config = TELEGRAM_TARGETS[targetKey] || TELEGRAM_TARGETS.mainUpdater;
+  const tokenEnvList = Array.isArray(config.botTokenEnvs)
+    ? config.botTokenEnvs
+    : [config.botTokenEnv].filter(Boolean);
+  const chatEnvList = Array.isArray(config.chatIdEnvs)
+    ? config.chatIdEnvs
+    : [config.chatIdEnv].filter(Boolean);
+  const selectedTokenEnv = tokenEnvList.find(
+    (envName) => normalizeConfigValue(process.env[envName]) !== "",
+  );
+  const selectedChatEnv = chatEnvList.find(
+    (envName) => normalizeConfigValue(process.env[envName]) !== "",
+  );
 
   return {
     key: targetKey,
     label: config.label,
-    botToken: normalizeConfigValue(process.env[config.botTokenEnv]),
-    chatId: normalizeConfigValue(process.env[config.chatIdEnv]),
-    botTokenEnv: config.botTokenEnv,
-    chatIdEnv: config.chatIdEnv,
+    botToken: normalizeConfigValue(
+      process.env[selectedTokenEnv || tokenEnvList[0] || ""],
+    ),
+    chatId: normalizeConfigValue(
+      process.env[selectedChatEnv || chatEnvList[0] || ""],
+    ),
+    botTokenEnv: selectedTokenEnv || tokenEnvList[0] || "",
+    chatIdEnv: selectedChatEnv || chatEnvList[0] || "",
   };
 }
 

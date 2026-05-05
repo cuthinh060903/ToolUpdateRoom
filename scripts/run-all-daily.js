@@ -39,14 +39,28 @@ function parseOnlyIds(value) {
     .filter((item) => Number.isFinite(item));
 }
 
+function normalizeRunContext(value = "") {
+  return value.toString().trim().toLowerCase() === "manual"
+    ? "manual"
+    : "daily";
+}
+
 function buildCombinedOptions(argv = [], env = process.env) {
   const args = parseArgs(argv);
   const skipAll = toBoolean(args["skip-all"], false);
+  const runContext = normalizeRunContext(
+    args["run-context"] ??
+      env.TOOL_RUN_CONTEXT ??
+      env.ROOM_AUDIT_RUN_CONTEXT ??
+      "daily",
+  );
 
   return {
+    runContext,
     skipMain: skipAll || toBoolean(args["skip-main"], false),
     skipRoomAudit: skipAll || toBoolean(args["skip-room-audit"], false),
     roomAudit: {
+      runContext,
       useApi: toBoolean(
         args["room-audit-use-api"] ?? env.ROOM_AUDIT_USE_API,
         true,
@@ -73,6 +87,8 @@ function buildCombinedOptions(argv = [], env = process.env) {
 async function runAllDailyFlow(options = {}) {
   let mainError = null;
   let roomAuditError = null;
+  process.env.TOOL_RUN_CONTEXT = options.runContext || "daily";
+  process.env.RUN_CONTEXT = process.env.TOOL_RUN_CONTEXT;
 
   if (!options.skipMain) {
     console.log("[combined] Starting trong-kin updater...");

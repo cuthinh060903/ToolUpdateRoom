@@ -10,7 +10,7 @@ const DEFAULT_REPORT_SHEET = {
   sheetGid: 297377874,
   headerRow: 1,
   firstDataRow: 2,
-  lastDataRow: 15,
+  lastDataRow: 16,
   firstDayColumn: 7,
   dayColumnWindowSize: 10,
 };
@@ -24,6 +24,14 @@ const PRICE_FIELD_REASONS = new Set([
   "PRICE_LOOKS_LIKE_ROOM_NAME",
 ]);
 const NO_IMAGE_REASONS = new Set(["IMAGE_COUNT_ZERO"]);
+const IMAGE_LINK_ACCESS_REASONS = new Set([
+  "IMAGE_LINK_INVALID",
+  "IMAGE_LINK_UNSUPPORTED",
+  "IMAGE_SOURCE_EMPTY_FOLDER",
+  "IMAGE_LINK_401",
+  "IMAGE_LINK_403",
+  "IMAGE_LINK_404",
+]);
 const NEW_BUILDING_LOG_FILES = ["nhamoi.txt", "khongcodulieu.txt"];
 const CDT_CONFIG_FILE = "constants.js";
 
@@ -151,6 +159,11 @@ function toBoolean(value, fallback = false) {
   }
 
   return ["1", "true", "yes", "y"].includes(value.toString().toLowerCase());
+}
+
+function resolveRoomAuditTelegramTargetKey(options = {}) {
+  const runContext = normalizeText(options.runContext).toLowerCase();
+  return runContext === "manual" ? "roomAuditManual" : "roomAuditDaily";
 }
 
 function parseNumber(value, fallback = null) {
@@ -336,6 +349,41 @@ function collectSourceErrorCdtIdsByLinkIndex(sourceErrors = [], targetIndex = nu
   return cdtIds;
 }
 
+function collectRunRootLinkCdtIds(report = {}, sourceErrors = []) {
+  const executionSummary = Array.isArray(report?.execution_summary_by_cdt)
+    ? report.execution_summary_by_cdt
+    : [];
+  const cdtIdsFromExecution = executionSummary
+    .filter((item) => item?.ran_root_link)
+    .map((item) => item?.cdt_id)
+    .filter((value) => value !== null && value !== undefined);
+
+  if (cdtIdsFromExecution.length > 0) {
+    return cdtIdsFromExecution;
+  }
+
+  return collectSourceErrorCdtIdsByLinkIndex(sourceErrors, 1);
+}
+
+function collectRunTargetLinkCdtIdsDueMissingRootAddress(
+  report = {},
+  sourceErrors = [],
+) {
+  const executionSummary = Array.isArray(report?.execution_summary_by_cdt)
+    ? report.execution_summary_by_cdt
+    : [];
+  const cdtIdsFromExecution = executionSummary
+    .filter((item) => item?.ran_target_link_due_missing_root_address)
+    .map((item) => item?.cdt_id)
+    .filter((value) => value !== null && value !== undefined);
+
+  if (cdtIdsFromExecution.length > 0) {
+    return cdtIdsFromExecution;
+  }
+
+  return collectSourceErrorCdtIdsByLinkIndex(sourceErrors, 2);
+}
+
 function collectVacantRoomCountByCdt(rows = []) {
   const countByCdtId = new Map();
 
@@ -405,6 +453,27 @@ function isMissingImageLinkError(row = {}) {
     Number(row?.image_count) === 0 ||
     rowHasAnyReason(row, NO_IMAGE_REASONS) ||
     imageDriver === ""
+  );
+}
+
+function hasImageAccessDeniedDriverLog(row = {}) {
+  const driverErrorLines = Array.isArray(row?.log_matches?.driver_error)
+    ? row.log_matches.driver_error
+    : [];
+  if (driverErrorLines.length === 0) {
+    return false;
+  }
+
+  const normalizedLog = normalizeComparableText(driverErrorLines.join(" | "));
+  return /you need access|request access|access denied|permission denied|khong co quyen|khong duoc phep/.test(
+    normalizedLog,
+  );
+}
+
+function isImageLinkAccessError(row = {}) {
+  return (
+    rowHasAnyReason(row, IMAGE_LINK_ACCESS_REASONS) ||
+    hasImageAccessDeniedDriverLog(row)
   );
 }
 
@@ -771,12 +840,12 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
     : `II.A.3: ${nonSelectedText}`;
   const a41Line = includeError(4)
     ? `II.A.4.1: Các CĐT chạy link gốc: ${cdtListText(
-        collectSourceErrorCdtIdsByLinkIndex(sourceErrors, 1),
+        collectRunRootLinkCdtIds(report, sourceErrors),
       )}`
     : `II.A.4.1: ${nonSelectedText}`;
   const a42Line = includeError(4)
     ? `II.A.4.2: Các CĐT chạy link đích: ${cdtListText(
-        collectSourceErrorCdtIdsByLinkIndex(sourceErrors, 2),
+        collectRunTargetLinkCdtIdsDueMissingRootAddress(report, sourceErrors),
       )}`
     : `II.A.4.2: ${nonSelectedText}`;
   const a4SheetLine = `${a41Line}\n${a42Line}`;
@@ -830,8 +899,15 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
     ? `II.B.8: Các CĐT có phòng trống: ${vacantRoomCountByCdtText(rows)}`
     : `II.B.8: ${nonSelectedText}`;
   const b9Line = includeError(13)
-    ? `II.B.9: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
+    ? `II.B.9: Các CĐT có phòng yêu cầu quyền truy cập link ảnh hoặc link ảnh không vào được: ${cdtListText(
+        rows
+          .filter((row) => isImageLinkAccessError(row))
+          .map((row) => row.cdt_id),
+      )}`
     : `II.B.9: ${nonSelectedText}`;
+  const b10Line = includeError(14)
+    ? `II.B.10: Các CĐT đóng tool: ${cdtListText(collectClosedToolCdtIds())}`
+    : `II.B.10: ${nonSelectedText}`;
 
   const lines = [
     a1Line,
@@ -847,6 +923,7 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
     b7Line,
     b8Line,
     b9Line,
+    b10Line,
   ];
 
   const telegramLines = [
@@ -864,6 +941,7 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
     b7Line,
     b8Line,
     b9Line,
+    b10Line,
   ];
 
   return {
@@ -1186,6 +1264,7 @@ async function sendTelegramMessages(reportPayload, options = {}) {
   const maxTelegramMessageLength = Number.isFinite(options?.telegramMaxLength)
     ? Math.max(500, Number(options.telegramMaxLength))
     : 3500;
+  const targetKey = resolveRoomAuditTelegramTargetKey(options);
 
   let sentCount = 0;
   for (const message of reportPayload.messages) {
@@ -1195,7 +1274,7 @@ async function sendTelegramMessages(reportPayload, options = {}) {
     );
     for (const messagePart of messageParts) {
       const result = await sendTelegramMessage(messagePart, {
-        targetKey: "roomAudit",
+        targetKey,
         parseMode: null,
         maxAttempts: 3,
         retryBaseMs: 1500,
@@ -1224,7 +1303,7 @@ async function sendRoomAuditTelegramStatus(message, options = {}) {
   }
 
   return sendTelegramMessage(message, {
-    targetKey: "roomAudit",
+    targetKey: resolveRoomAuditTelegramTargetKey(options),
     parseMode: null,
     maxAttempts: 3,
     retryBaseMs: 1500,
