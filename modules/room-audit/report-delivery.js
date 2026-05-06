@@ -42,6 +42,21 @@ function normalizeText(value) {
   return value.toString().trim();
 }
 
+function isValidUrl(value = "") {
+  const text = normalizeText(value);
+  if (!text) {
+    return false;
+  }
+
+  try {
+    // eslint-disable-next-line no-new
+    new URL(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function looksLikePriceText(value = "") {
   const text = normalizeText(value);
   return /(?:^|\s)(\$+\s*\d+([.,]\d+)?|\d+([.,]\d+)?\s*(tr|trieu|triệu|m|k|vnd|usd|d|đ|\$)|\d{6,})(?:\s|$)/i.test(
@@ -470,10 +485,34 @@ function hasImageAccessDeniedDriverLog(row = {}) {
   );
 }
 
+function hasValidDriveLinkButNoImage(row = {}) {
+  const sourceLink = normalizeText(
+    row.image_driver || row.origin_link || row.image_link,
+  );
+  if (!sourceLink || Number(row?.image_count) !== 0) {
+    return false;
+  }
+
+  if (!/^https?:\/\/drive\.google\.com\//i.test(sourceLink)) {
+    return false;
+  }
+
+  if ((sourceLink.match(/https?:\/\//gi) || []).length > 1) {
+    return false;
+  }
+
+  if (!isValidUrl(sourceLink)) {
+    return false;
+  }
+
+  return true;
+}
+
 function isImageLinkAccessError(row = {}) {
   return (
     rowHasAnyReason(row, IMAGE_LINK_ACCESS_REASONS) ||
-    hasImageAccessDeniedDriverLog(row)
+    hasImageAccessDeniedDriverLog(row) ||
+    hasValidDriveLinkButNoImage(row)
   );
 }
 
