@@ -130,26 +130,51 @@ function hasAnyLog(lines = []) {
   return Array.isArray(lines) && lines.length > 0;
 }
 
+function hasHttpStatusCodeHint(text = "", code = 0) {
+  const escapedCode = String(code).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    [
+      `\\b(?:status|http|response|code|forbidden|unauthorized|not\\s+found)\\b[^\\n\\r]{0,40}\\b${escapedCode}\\b`,
+      `\\b${escapedCode}\\b[^\\n\\r]{0,40}\\b(?:forbidden|unauthorized|not\\s+found)\\b`,
+    ].join("|"),
+    "i",
+  );
+  return pattern.test(text);
+}
+
 function detectDriverErrorReasons(lines = []) {
-  const joined = lines.join(" | ").toLowerCase();
+  const normalizedLines = lines.map((line) => line.toString().toLowerCase());
+  const joined = normalizedLines.join(" | ");
   const reasons = [];
 
-  if (joined.includes("invalid_link")) {
+  if (joined.includes("invalid_link") || joined.includes("không hợp lệ")) {
     reasons.push("IMAGE_LINK_INVALID");
   }
-  if (joined.includes("unsupported_link")) {
+  if (
+    joined.includes("unsupported_link") ||
+    joined.includes("không được hỗ trợ")
+  ) {
     reasons.push("IMAGE_LINK_UNSUPPORTED");
   }
-  if (joined.includes("empty_folder")) {
+  if (
+    joined.includes("empty_folder") ||
+    joined.includes("không tìm thấy ảnh khả dụng")
+  ) {
     reasons.push("IMAGE_SOURCE_EMPTY_FOLDER");
   }
-  if (/(?:^|\D)401(?:\D|$)/.test(joined)) {
+  if (normalizedLines.some((line) => hasHttpStatusCodeHint(line, 401))) {
     reasons.push("IMAGE_LINK_401");
   }
-  if (/(?:^|\D)403(?:\D|$)/.test(joined)) {
+  if (
+    normalizedLines.some((line) => hasHttpStatusCodeHint(line, 403)) ||
+    joined.includes("access denied") ||
+    joined.includes("permission denied") ||
+    joined.includes("you need access") ||
+    joined.includes("request access")
+  ) {
     reasons.push("IMAGE_LINK_403");
   }
-  if (/(?:^|\D)404(?:\D|$)/.test(joined)) {
+  if (normalizedLines.some((line) => hasHttpStatusCodeHint(line, 404))) {
     reasons.push("IMAGE_LINK_404");
   }
 

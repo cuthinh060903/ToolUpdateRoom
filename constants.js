@@ -3917,7 +3917,7 @@ sheet_source_priority: [
     web: "103 milk vp",
     link: "https://docs.google.com/spreadsheets/d/10_ihGGN7xRI9vzrKcfR9iF8iDDWbsUZF9DjFPXX13O4/edit?gid=0#gid=0",
     // scv: "https://docs.google.com/spreadsheets/d/19XR8tZOI09FvWyEihNAgVvl53ZBgXPI7jvCpDHSRUV0/export?format=csv&gid=",
-    //list_address: [1103043570], /// có nhiều id khác nhau
+    list_address: [0], /// có nhiều id khác nhau
     // exitBackgroundColor: ["#cccccc"], // màu nền ô muốn lọc kín
     // exitTextColor: null, // màu chữ muốn lọc kín
     // exitColumnColor: 0, // cột màu muốn lọc kín
