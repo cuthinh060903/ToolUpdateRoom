@@ -4757,6 +4757,12 @@ class UpdateRoomSari {
                                     Boolean(
                                       huydev?.skip_create_room_when_price_missing,
                                     ) && normalizedRowPrice <= 0;
+                                  const normalizedDescriptionForCreate =
+                                    this.sanitizeTextForLegacyApi(
+                                      row["DESCRIPTIONS"] || "",
+                                    );
+                                  const shouldSkipCreateWhenMissingDescription =
+                                    !normalizedDescriptionForCreate;
                                   if (shouldSkipCreateWhenMissingPrice) {
                                     await this.appendToFile(
                                       "khongcodulieu.txt",
@@ -4770,6 +4776,22 @@ class UpdateRoomSari {
                                     );
                                     console.warn(
                                       `Bỏ qua tạo mới phòng ${roomNumber} do thiếu giá (CDT ${huydev.id}).`,
+                                    );
+                                    continue;
+                                  }
+                                  if (shouldSkipCreateWhenMissingDescription) {
+                                    await this.appendToFile(
+                                      "khongcodulieu.txt",
+                                      `${huydev.link + idSheetUrl}|${
+                                        item.code
+                                      }|${row["ADDRESS"]}|${roomNumber}|${
+                                        normalizedRowPrice
+                                      }|SKIP_CREATE_ROOM_MISSING_DESCRIPTION|${formattedDate}|${
+                                        huydev.web
+                                      }\n`,
+                                    );
+                                    console.warn(
+                                      `Bỏ qua tạo mới phòng ${roomNumber} do thiếu mô tả (CDT ${huydev.id}).`,
                                     );
                                     continue;
                                   }
@@ -4803,10 +4825,7 @@ class UpdateRoomSari {
                                         room?.image_link || row["IMAGE_DRIVER"],
                                       origin_link: row["IMAGE_DRIVER"] || "",
                                       is_deleted: false,
-                                      description:
-                                        this.sanitizeTextForLegacyApi(
-                                          row["DESCRIPTIONS"] || "",
-                                        ),
+                                      description: normalizedDescriptionForCreate,
                                     };
                                     const res = await this.createRoom(data);
                                     if (!res?.id) {
