@@ -4982,3 +4982,4 @@ du học 1110|du_lich|gid:246641757|addr:0|room:1|code:|price:9|exitCol:0|exitDr
 21 ren house|chdv|gid:462274843|addr:1|room:6|code:|price:7|exitCol:10|exitDriver:3|header:5|5/5/2026-17:03:06|TRUE
 21 ren house|chdv|gid:462274843|addr:1|room:6|code:|price:7|exitCol:10|exitDriver:3|header:5|5/5/2026-17:04:57|TRUE
 21 ren house|chdv|gid:462274843|addr:1|room:6|code:|price:7|exitCol:10|exitDriver:3|header:5|5/5/2026-17:07:09|TRUE
+38 Huy|chdv|gid:0|addr:|room:0|code:|price:4|exitCol:|exitDriver:|header:0|7/5/2026-11:16:49|TRUE

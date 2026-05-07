@@ -873,7 +873,7 @@ function buildTelegramAndSheetLines(report, now = new Date()) {
     ? buildNoVacantLine(report)
     : `II.A.2: ${nonSelectedText}`;
   const a3Line = includeError(3)
-    ? `II.A.3: Các CĐT bị lỗi link bảng hàng đích: ${buildCode3CdtWithLinkText(
+    ? `II.A.3: Các CĐT bị lỗi link bảng hàng: ${buildCode3CdtWithLinkText(
         sourceErrors,
       )}`
     : `II.A.3: ${nonSelectedText}`;

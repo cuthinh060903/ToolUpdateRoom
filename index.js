@@ -3813,15 +3813,11 @@ class UpdateRoomSari {
     const hasPriceField =
       this.hasConfiguredField(config?.price_column) ||
       this.hasLegacyColumnConfig(config, 3);
-    const hasDescriptionField = this.hasConfiguredField(config?.mota);
-    const hasImageField = this.hasConfiguredField(config?.exitLinkDriver);
 
     const missingFields = [];
     if (!hasAddressField) missingFields.push("địa chỉ");
     if (!hasRoomField) missingFields.push("tên phòng");
     if (!hasPriceField) missingFields.push("giá");
-    if (!hasDescriptionField) missingFields.push("mô tả");
-    if (!hasImageField) missingFields.push("ảnh");
 
     return {
       ok: missingFields.length === 0,
@@ -5130,7 +5126,7 @@ class UpdateRoomSari {
             // Gửi báo cáo địa chỉ thiếu sau khi chạy xong 1 CDT
             if (missingAddresses.size > 0) {
               const missingList = Array.from(missingAddresses).join("\n+ ");
-              const summaryMsg = `❌ DANH SÁCH ĐỊA CHỈ THIẾU (${executionKey}):\n+ ${missingList}`;
+              const summaryMsg = `❌ DANH SÁCH ĐỊA CHỈ THIẾU (id: ${huydev.id}|${executionKey}):\n+ ${missingList}`;
               await this.sendMainTelegramMessage(summaryMsg);
             }
             const formattedDate = this.getFormattedDate();
@@ -5282,23 +5278,26 @@ class UpdateRoomSari {
     let price = room?.price;
     if (row["DESCRIPTIONS"]) {
       const rawDescription = row["DESCRIPTIONS"];
-      description = this.sanitizeTextForLegacyApi(rawDescription);
-      const extension = this.convertDescription2Extension(rawDescription);
-      if (this.verboseRuntimeLogs) {
-        console.log(extension);
-      }
-      const res = await this.callApi({
-        domain: `https://apiv1.sari.vn/v1`,
-        path: `/tag-relations/room/${room.id}`,
-        method: "PUT",
-        data: extension,
-      });
-      if (res.status !== 200) {
-        console.log("Cập nhật trống thất bại");
-      } else {
+      const nextDescription = this.sanitizeTextForLegacyApi(rawDescription);
+      if (nextDescription) {
+        description = nextDescription;
+        const extension = this.convertDescription2Extension(nextDescription);
         if (this.verboseRuntimeLogs) {
-          console.log("room.id=>>>>", room.id);
-          console.log("Cập nhật trống thành công");
+          console.log(extension);
+        }
+        const res = await this.callApi({
+          domain: `https://apiv1.sari.vn/v1`,
+          path: `/tag-relations/room/${room.id}`,
+          method: "PUT",
+          data: extension,
+        });
+        if (res.status !== 200) {
+          console.log("Cập nhật trống thất bại");
+        } else {
+          if (this.verboseRuntimeLogs) {
+            console.log("room.id=>>>>", room.id);
+            console.log("Cập nhật trống thành công");
+          }
         }
       }
     }
@@ -5439,7 +5438,6 @@ class UpdateRoomSari {
     const imageDriver = (row["IMAGE_DRIVER"] || "").toString().trim();
     if (imageDriver) {
       try {
-        await this.updateRoom(room.id, { origin_link: imageDriver });
         const uploadResult = await this.downloadAllFilesFromFolder(
           imageDriver,
           room,
@@ -5447,6 +5445,7 @@ class UpdateRoomSari {
         );
 
         if (uploadResult?.status === "uploaded") {
+          await this.updateRoom(room.id, { origin_link: imageDriver });
           await this.appendToFile(
             "capnhatdriver.txt",
             `${huydev.link + idSheetUrl}|${item.code}|${
@@ -5459,6 +5458,7 @@ class UpdateRoomSari {
             `Ph??ng ${roomNumber} v???i ID ${room.id} v?? ???? ???????c c???p nh???t h??nh t??? driver link ${imageDriver}.`,
           );
         } else if (uploadResult?.status === "already_uploaded") {
+          await this.updateRoom(room.id, { origin_link: imageDriver });
           console.log(
             `Ph??ng ${roomNumber} v???i ID ${room.id} ???? c?? s???n ${uploadResult.count} ???nh tr??n MinIO.`,
           );
