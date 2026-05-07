@@ -4761,8 +4761,6 @@ class UpdateRoomSari {
                                     this.sanitizeTextForLegacyApi(
                                       row["DESCRIPTIONS"] || "",
                                     );
-                                  const shouldSkipCreateWhenMissingDescription =
-                                    !normalizedDescriptionForCreate;
                                   if (shouldSkipCreateWhenMissingPrice) {
                                     await this.appendToFile(
                                       "khongcodulieu.txt",
@@ -4776,22 +4774,6 @@ class UpdateRoomSari {
                                     );
                                     console.warn(
                                       `Bỏ qua tạo mới phòng ${roomNumber} do thiếu giá (CDT ${huydev.id}).`,
-                                    );
-                                    continue;
-                                  }
-                                  if (shouldSkipCreateWhenMissingDescription) {
-                                    await this.appendToFile(
-                                      "khongcodulieu.txt",
-                                      `${huydev.link + idSheetUrl}|${
-                                        item.code
-                                      }|${row["ADDRESS"]}|${roomNumber}|${
-                                        normalizedRowPrice
-                                      }|SKIP_CREATE_ROOM_MISSING_DESCRIPTION|${formattedDate}|${
-                                        huydev.web
-                                      }\n`,
-                                    );
-                                    console.warn(
-                                      `Bỏ qua tạo mới phòng ${roomNumber} do thiếu mô tả (CDT ${huydev.id}).`,
                                     );
                                     continue;
                                   }
