@@ -509,26 +509,51 @@ class UpdateRoomSari {
       await this.minioClient.makeBucket(bucketName);
       console.log(`✅ Created bucket: ${bucketName}`);
     }
-    const objectsStream = this.minioClient.listObjects(
-      bucketName,
-      objectPath,
-      true,
-    );
-    let found = [];
-    await new Promise((resolve, reject) => {
-      objectsStream.on("data", (obj) => {
-        found.push(obj);
-        return;
-      });
-      objectsStream.on("error", reject);
-      objectsStream.on("end", () => resolve(false));
-    });
+    const found = await this.listMinioObjectsByPrefix(objectPath, bucketName);
 
     if (expectedCount > 0) {
       return found.length >= expectedCount;
     }
 
     return found.length > this.minFileUpload;
+  }
+
+  async listMinioObjectsByPrefix(objectPath, bucketName) {
+    this.ensureMinioCredentials();
+    const objectsStream = this.minioClient.listObjects(
+      bucketName,
+      objectPath,
+      true,
+    );
+    const found = [];
+    await new Promise((resolve, reject) => {
+      objectsStream.on("data", (obj) => {
+        found.push(obj);
+      });
+      objectsStream.on("error", reject);
+      objectsStream.on("end", resolve);
+    });
+
+    return found;
+  }
+
+  async removeMinioObjectsByPrefix(objectPath, bucketName) {
+    const existingObjects = await this.listMinioObjectsByPrefix(
+      objectPath,
+      bucketName,
+    );
+    if (!existingObjects.length) {
+      return 0;
+    }
+
+    for (const objectInfo of existingObjects) {
+      if (!objectInfo?.name) {
+        continue;
+      }
+      await this.minioClient.removeObject(bucketName, objectInfo.name);
+    }
+
+    return existingObjects.length;
   }
 
   /**
@@ -830,17 +855,40 @@ class UpdateRoomSari {
       return { status: "empty_folder" };
     }
 
-    if (
-      await this.checkUploadFile(
-        `rooms/${room.id}/photos`,
-        this.BUCKETNAME,
-        imageFiles.length,
-      )
-    ) {
+    const photosPrefix = `rooms/${room.id}/photos`;
+    const existingObjects = await this.listMinioObjectsByPrefix(
+      photosPrefix,
+      this.BUCKETNAME,
+    );
+    const existingCount = existingObjects.length;
+    const incomingCount = imageFiles.length;
+
+    if (existingCount > 0 && existingCount === incomingCount) {
       console.log(
-        `Room ${room.id} already has ${imageFiles.length} image(s) on MinIO.`,
+        `Room ${room.id} already has ${incomingCount} image(s) on MinIO.`,
       );
-      return { status: "already_uploaded", count: imageFiles.length };
+      return { status: "already_uploaded", count: incomingCount };
+    }
+
+    if (existingCount > 0 && existingCount !== incomingCount) {
+      if (incomingCount >= 2) {
+        const deletedCount = await this.removeMinioObjectsByPrefix(
+          photosPrefix,
+          this.BUCKETNAME,
+        );
+        console.log(
+          `Room ${room.id} image count changed ${existingCount} -> ${incomingCount}. Deleted ${deletedCount} old image(s) and re-uploading.`,
+        );
+      } else {
+        console.log(
+          `Room ${room.id} image count changed ${existingCount} -> ${incomingCount} but incoming image count < 2, keep existing images.`,
+        );
+        return {
+          status: "keep_existing_low_new_count",
+          count: existingCount,
+          incomingCount,
+        };
+      }
     }
 
     const delayMs = 1000;
@@ -5462,6 +5510,10 @@ class UpdateRoomSari {
           await this.updateRoom(room.id, { origin_link: imageDriver });
           console.log(
             `Ph??ng ${roomNumber} v???i ID ${room.id} ???? c?? s???n ${uploadResult.count} ???nh tr??n MinIO.`,
+          );
+        } else if (uploadResult?.status === "keep_existing_low_new_count") {
+          console.log(
+            `Giữ ảnh cũ cho phòng ${roomNumber} (${room.id}) vì link mới chỉ có ${uploadResult.incomingCount} ảnh (<2).`,
           );
         } else if (uploadResult?.status === "empty_folder") {
           console.log(
